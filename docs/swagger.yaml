@@ -1,0 +1,407 @@
+basePath: /
+definitions:
+  buildinfo.Info:
+    properties:
+      build_time:
+        type: string
+      commit:
+        type: string
+      started_at:
+        type: string
+      uptime:
+        type: string
+      version:
+        type: string
+    type: object
+  health.Dependency:
+    properties:
+      latency:
+        type: string
+      status:
+        type: string
+    type: object
+  health.Status:
+    properties:
+      dependencies:
+        additionalProperties:
+          $ref: '#/definitions/health.Dependency'
+        type: object
+      status:
+        type: string
+    type: object
+  httptransport.GetDeliveryRequest:
+    properties:
+      id:
+        type: string
+      tenant_id:
+        type: string
+    required:
+    - id
+    - tenant_id
+    type: object
+  httptransport.ListDeliveriesRequest:
+    properties:
+      page:
+        type: integer
+      page_size:
+        type: integer
+      status:
+        type: string
+      tenant_id:
+        type: string
+    required:
+    - tenant_id
+    type: object
+  httptransport.MeResponseBody:
+    properties:
+      subject:
+        type: string
+    type: object
+  httptransport.PutTemplateRequest:
+    properties:
+      channel:
+        type: string
+      code:
+        type: string
+      content:
+        type: string
+      expected_version:
+        type: integer
+      locale:
+        type: string
+      status:
+        type: string
+      subject:
+        type: string
+      tenant_id:
+        type: string
+    required:
+    - channel
+    - code
+    - content
+    - locale
+    - tenant_id
+    type: object
+  httptransport.Response:
+    properties:
+      body: {}
+      code:
+        type: integer
+      message:
+        type: string
+      request_id:
+        type: string
+    type: object
+  httptransport.SendNotificationRequest:
+    properties:
+      channel:
+        type: string
+      idempotency_key:
+        type: string
+      locale:
+        type: string
+      recipient:
+        type: string
+      template_code:
+        type: string
+      tenant_id:
+        type: string
+      variables:
+        additionalProperties:
+          type: string
+        type: object
+    required:
+    - channel
+    - idempotency_key
+    - locale
+    - recipient
+    - template_code
+    - tenant_id
+    type: object
+  notification.Delivery:
+    properties:
+      attempts:
+        type: integer
+      channel:
+        type: string
+      created_at:
+        type: string
+      created_by:
+        type: string
+      failure_reason:
+        type: string
+      id:
+        type: string
+      idempotency_key:
+        type: string
+      locale:
+        type: string
+      next_attempt_at:
+        type: string
+      provider:
+        type: string
+      provider_message_id:
+        type: string
+      recipient:
+        type: string
+      status:
+        type: string
+      template_code:
+        type: string
+      tenant_id:
+        type: string
+      updated_at:
+        type: string
+      updated_by:
+        type: string
+      variables:
+        items:
+          type: integer
+        type: array
+      version:
+        type: integer
+    type: object
+  notification.Page:
+    properties:
+      deliveries:
+        items:
+          $ref: '#/definitions/notification.Delivery'
+        type: array
+      page:
+        type: integer
+      page_size:
+        type: integer
+      total:
+        type: integer
+    type: object
+  notification.Template:
+    properties:
+      channel:
+        type: string
+      code:
+        type: string
+      content:
+        type: string
+      created_at:
+        type: string
+      created_by:
+        type: string
+      id:
+        type: string
+      locale:
+        type: string
+      status:
+        type: string
+      subject:
+        type: string
+      tenant_id:
+        type: string
+      updated_at:
+        type: string
+      updated_by:
+        type: string
+      version:
+        type: integer
+    type: object
+info:
+  contact: {}
+  description: 'Production-oriented Go Web API scaffold. Application error codes:
+    0 success; 10000-19999 common/input; 20000-29999 authentication/authorization;
+    30000-39999 business; 50000-59999 infrastructure.'
+  title: Go API Template
+  version: "1.0"
+paths:
+  /api/v1/me:
+    post:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/httptransport.Response'
+            - properties:
+                body:
+                  $ref: '#/definitions/httptransport.MeResponseBody'
+              type: object
+        "401":
+          description: 'Code 20001: unauthorized'
+          schema:
+            $ref: '#/definitions/httptransport.Response'
+      security:
+      - Bearer: []
+      summary: Return the authenticated subject
+      tags:
+      - authentication
+  /api/v1/notifications/deliveries/get:
+    post:
+      parameters:
+      - description: Delivery ID
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/httptransport.GetDeliveryRequest'
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/httptransport.Response'
+            - properties:
+                body:
+                  $ref: '#/definitions/notification.Delivery'
+              type: object
+      security:
+      - Bearer: []
+      summary: Get notification delivery status
+      tags:
+      - notification
+  /api/v1/notifications/deliveries/list:
+    post:
+      parameters:
+      - description: Delivery filter
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/httptransport.ListDeliveriesRequest'
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/httptransport.Response'
+            - properties:
+                body:
+                  $ref: '#/definitions/notification.Page'
+              type: object
+      security:
+      - Bearer: []
+      summary: List notification deliveries
+      tags:
+      - notification
+  /api/v1/notifications/send:
+    post:
+      parameters:
+      - description: Notification
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/httptransport.SendNotificationRequest'
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/httptransport.Response'
+            - properties:
+                body:
+                  $ref: '#/definitions/notification.Delivery'
+              type: object
+      security:
+      - Bearer: []
+      summary: Queue a notification for asynchronous delivery
+      tags:
+      - notification
+  /api/v1/notifications/templates/put:
+    post:
+      parameters:
+      - description: Template
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/httptransport.PutTemplateRequest'
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/httptransport.Response'
+            - properties:
+                body:
+                  $ref: '#/definitions/notification.Template'
+              type: object
+      security:
+      - Bearer: []
+      summary: Create or update notification template
+      tags:
+      - notification
+  /api/v1/version:
+    post:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/httptransport.Response'
+            - properties:
+                body:
+                  $ref: '#/definitions/buildinfo.Info'
+              type: object
+      summary: Return build and runtime version information
+      tags:
+      - operations
+  /live:
+    post:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/httptransport.Response'
+            - properties:
+                body:
+                  $ref: '#/definitions/health.Status'
+              type: object
+      summary: Check process liveness
+      tags:
+      - operations
+  /ready:
+    post:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/httptransport.Response'
+            - properties:
+                body:
+                  $ref: '#/definitions/health.Status'
+              type: object
+        "503":
+          description: 'Code 50003: dependency unavailable'
+          schema:
+            allOf:
+            - $ref: '#/definitions/httptransport.Response'
+            - properties:
+                body:
+                  $ref: '#/definitions/health.Status'
+              type: object
+      summary: Check database and Redis readiness
+      tags:
+      - operations
+schemes:
+- http
+- https
+securityDefinitions:
+  Bearer:
+    description: Enter "Bearer {JWT}".
+    in: header
+    name: Authorization
+    type: apiKey
+  PSK:
+    description: Enter "PSK {shared-key}" for routes configured with PSK authentication.
+    in: header
+    name: Authorization
+    type: apiKey
+swagger: "2.0"
