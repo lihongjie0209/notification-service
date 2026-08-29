@@ -57,6 +57,24 @@ definitions:
       subject:
         type: string
     type: object
+  httptransport.ProviderReceiptRequest:
+    properties:
+      failure_reason:
+        type: string
+      provider:
+        type: string
+      provider_message_id:
+        type: string
+      status:
+        type: string
+      tenant_id:
+        type: string
+    required:
+    - provider
+    - provider_message_id
+    - status
+    - tenant_id
+    type: object
   httptransport.PutTemplateRequest:
     properties:
       channel:
@@ -280,6 +298,30 @@ paths:
       security:
       - Bearer: []
       summary: List notification deliveries
+      tags:
+      - notification
+  /api/v1/notifications/providers/receipt:
+    post:
+      parameters:
+      - description: Provider receipt
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/httptransport.ProviderReceiptRequest'
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/httptransport.Response'
+            - properties:
+                body:
+                  $ref: '#/definitions/notification.Delivery'
+              type: object
+      security:
+      - PSK: []
+      summary: Record an authenticated provider delivery receipt
       tags:
       - notification
   /api/v1/notifications/send:

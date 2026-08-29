@@ -208,6 +208,9 @@ type Notification struct {
 	BatchSize        int                             `mapstructure:"batch_size"`
 	MaxAttempts      int32                           `mapstructure:"max_attempts"`
 	RetryBase        time.Duration                   `mapstructure:"retry_base"`
+	TenantLimit      RateLimitRule                   `mapstructure:"tenant_limit"`
+	TemplateLimit    RateLimitRule                   `mapstructure:"template_limit"`
+	RecipientLimit   RateLimitRule                   `mapstructure:"recipient_limit"`
 	Providers        map[string]NotificationProvider `mapstructure:"providers"`
 }
 type NotificationProvider struct {
@@ -432,6 +435,9 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("notification.batch_size", 100)
 	v.SetDefault("notification.max_attempts", 8)
 	v.SetDefault("notification.retry_base", "5s")
+	setRateLimitDefaults(v, "notification.tenant_limit", 1000, 100)
+	setRateLimitDefaults(v, "notification.template_limit", 300, 50)
+	setRateLimitDefaults(v, "notification.recipient_limit", 10, 3)
 	v.SetDefault("outbound.http", map[string]any{})
 	v.SetDefault("outbound.grpc", map[string]any{})
 }
@@ -477,6 +483,11 @@ func (c Config) Validate() error {
 		for name, rule := range map[string]RateLimitRule{"ip": c.RateLimit.IP, "api": c.RateLimit.API, "user": c.RateLimit.User, "login": c.RateLimit.Login} {
 			if rule.Rate <= 0 || rule.Burst <= 0 || rule.Period <= 0 {
 				return fmt.Errorf("rate_limit.%s values must be positive", name)
+			}
+		}
+		for name, rule := range map[string]RateLimitRule{"notification.tenant_limit": c.Notification.TenantLimit, "notification.template_limit": c.Notification.TemplateLimit, "notification.recipient_limit": c.Notification.RecipientLimit} {
+			if rule.Rate <= 0 || rule.Burst <= 0 || rule.Period <= 0 {
+				return fmt.Errorf("%s values must be positive", name)
 			}
 		}
 	}

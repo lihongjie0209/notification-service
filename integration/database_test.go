@@ -57,7 +57,7 @@ func TestRepositoryAndMigrations(t *testing.T) {
 				t.Fatal(err)
 			}
 			t.Cleanup(func() { _ = db.Close() })
-			service := notificationdomain.NewService(notificationdomain.NewRepository(db), appdb.NewTransactor(db))
+			service := notificationdomain.NewService(notificationdomain.NewRepository(db), appdb.NewTransactor(db), nil, config.Config{})
 			actorCtx := principal.WithContext(ctx, principal.Principal{Subject: "admin-1", Method: principal.AuthenticationJWT})
 			template, err := service.PutTemplate(actorCtx, notificationdomain.Template{TenantID: "tenant-1", Code: "welcome", Channel: "email", Locale: "zh-cn", Subject: "Welcome", Content: "Hello {{.name}}"}, 0)
 			if err != nil || template.Version != 1 {
@@ -70,6 +70,14 @@ func TestRepositoryAndMigrations(t *testing.T) {
 			replay, err := service.Send(actorCtx, "tenant-1", "welcome", "email", "zh-cn", "a@example.com", "send-1", map[string]string{"name": "Alice"})
 			if err != nil || replay.ID != first.ID {
 				t.Fatalf("replay=%+v err=%v", replay, err)
+			}
+			if _, err := db.ExecContext(ctx, db.Rebind(`UPDATE notification_deliveries SET status='sent',provider='email',provider_message_id='provider-1',version=version+1 WHERE id=?`), first.ID); err != nil {
+				t.Fatalf("simulate provider send: %v", err)
+			}
+			receiptCtx := principal.WithContext(ctx, principal.Principal{Subject: "provider:email", Method: principal.AuthenticationPSK})
+			delivered, err := service.RecordReceipt(receiptCtx, "tenant-1", "email", "provider-1", "delivered", "")
+			if err != nil || delivered.Status != "delivered" || delivered.Version != 3 {
+				t.Fatalf("receipt=%+v err=%v", delivered, err)
 			}
 			var userTables int
 			if databaseType == "postgres" {

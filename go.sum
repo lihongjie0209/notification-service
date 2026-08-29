@@ -196,6 +196,8 @@ github.com/lihongjie0209/microservice-platform-go v0.1.2 h1:2Gvma55C7aaiSyP4Ahzi
 github.com/lihongjie0209/microservice-platform-go v0.1.2/go.mod h1:c6WXYls65NxOuS/PxYoGp0XBHaI8tGENalyZ++40nio=
 github.com/lihongjie0209/platform-protos v0.1.0 h1:25fuJ1pqgnWNX86lWYpNxJ+txqbTHaCD+oo4PsrXSyg=
 github.com/lihongjie0209/platform-protos v0.1.0/go.mod h1:4+sC01i2paETB4e0fdEb/5QpYxRrA3CpH1BbAUpBAR4=
+github.com/lihongjie0209/platform-protos v0.3.0 h1:OpDx+H2jM5lt+K1IfQmQFz7AnWvd23w91PIuDFFcHRk=
+github.com/lihongjie0209/platform-protos v0.3.0/go.mod h1:4+sC01i2paETB4e0fdEb/5QpYxRrA3CpH1BbAUpBAR4=
 github.com/lufia/plan9stats v0.0.0-20260330125221-c963978e514e h1:Q6MvJtQK/iRcRtzAscm/zF23XxJlbECiGPyRicsX+Ak=
 github.com/lufia/plan9stats v0.0.0-20260330125221-c963978e514e/go.mod h1:autxFIvghDt3jPTLoqZ9OZ7s9qTGNAWmYCjVFWPX/zg=
 github.com/magiconair/properties v1.8.10 h1:s31yESBquKXCV9a/ScB3ESkOjUYYv+X0rg8SYxI99mE=

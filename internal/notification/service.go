@@ -12,8 +12,10 @@ import (
 	"github.com/jmoiron/sqlx"
 	"github.com/lihongjie0209/microservice-platform-go/eventbus"
 	"github.com/lihongjie0209/notification-service/internal/apperror"
+	"github.com/lihongjie0209/notification-service/internal/config"
 	"github.com/lihongjie0209/notification-service/internal/database"
 	"github.com/lihongjie0209/notification-service/internal/principal"
+	"github.com/lihongjie0209/notification-service/internal/ratelimit"
 	notificationv1 "github.com/lihongjie0209/platform-protos/gen/go/platform/notification/v1"
 	"go.uber.org/fx"
 	"google.golang.org/protobuf/proto"
@@ -23,11 +25,13 @@ import (
 type Service struct {
 	repository Repository
 	transactor *database.Transactor
+	limiter    *ratelimit.Limiter
+	config     config.Notification
 	now        func() time.Time
 }
 
-func NewService(r Repository, t *database.Transactor) *Service {
-	return &Service{repository: r, transactor: t, now: time.Now}
+func NewService(r Repository, t *database.Transactor, limiter *ratelimit.Limiter, cfg config.Config) *Service {
+	return &Service{repository: r, transactor: t, limiter: limiter, config: cfg.Notification, now: time.Now}
 }
 func (s *Service) PutTemplate(ctx context.Context, v Template, expected int64) (Template, error) {
 	v.TenantID = strings.TrimSpace(v.TenantID)
@@ -80,6 +84,9 @@ func (s *Service) Send(ctx context.Context, tenant, code, channel, locale, recip
 	} else if !errors.Is(err, ErrNotFound) {
 		return Delivery{}, translate(err)
 	}
+	if err := s.checkFrequency(ctx, tenant, code, channel, recipient); err != nil {
+		return Delivery{}, err
+	}
 	tpl, err := s.repository.GetTemplate(ctx, tenant, code, channel, locale)
 	if err != nil {
 		return Delivery{}, translate(err)
@@ -105,12 +112,71 @@ func (s *Service) Send(ctx context.Context, tenant, code, channel, locale, recip
 	})
 	return v, translate(err)
 }
+func (s *Service) checkFrequency(ctx context.Context, tenant, code, channel, recipient string) error {
+	if s.limiter == nil || !s.limiter.Enabled() {
+		return nil
+	}
+	checks := []struct {
+		key  string
+		rule config.RateLimitRule
+	}{
+		{"notification:tenant:" + tenant, s.config.TenantLimit},
+		{"notification:template:" + tenant + ":" + channel + ":" + code, s.config.TemplateLimit},
+		{"notification:recipient:" + tenant + ":" + channel + ":" + recipient, s.config.RecipientLimit},
+	}
+	for _, check := range checks {
+		result, err := s.limiter.Allow(ctx, check.key, check.rule)
+		if err != nil {
+			if s.limiter.FailOpen() {
+				continue
+			}
+			return apperror.Unavailable("notification frequency limiter unavailable", err)
+		}
+		if !result.Allowed {
+			return apperror.TooManyRequests()
+		}
+	}
+	return nil
+}
 func (s *Service) GetDelivery(ctx context.Context, id, tenant string) (Delivery, error) {
 	if _, ok := principal.FromContext(ctx); !ok {
 		return Delivery{}, apperror.Unauthorized("authenticated actor is required")
 	}
 	v, err := s.repository.GetDelivery(ctx, id, tenant)
 	return v, translate(err)
+}
+func (s *Service) RecordReceipt(ctx context.Context, tenant, provider, messageID, statusValue, reason string) (Delivery, error) {
+	tenant, provider, messageID = strings.TrimSpace(tenant), strings.ToLower(strings.TrimSpace(provider)), strings.TrimSpace(messageID)
+	statusValue, reason = strings.ToLower(strings.TrimSpace(statusValue)), strings.TrimSpace(reason)
+	if tenant == "" || provider == "" || messageID == "" || !validReceiptStatus(statusValue) {
+		return Delivery{}, apperror.Invalid("invalid provider receipt", nil)
+	}
+	caller, ok := principal.FromContext(ctx)
+	if !ok {
+		return Delivery{}, apperror.Unauthorized("authenticated actor is required")
+	}
+	delivery, err := s.repository.GetDeliveryByProviderMessage(ctx, tenant, provider, messageID)
+	if err != nil {
+		return Delivery{}, translate(err)
+	}
+	if delivery.Status == statusValue {
+		return delivery, nil
+	}
+	if terminalDeliveryStatus(delivery.Status) {
+		return Delivery{}, apperror.Conflict("delivery already has a terminal status", nil)
+	}
+	now := s.now()
+	delivery.Status, delivery.FailureReason = statusValue, reason
+	delivery.UpdatedAt, delivery.UpdatedBy = now, caller.Subject
+	expected := delivery.Version
+	err = s.transactor.Within(ctx, nil, func(tx *sqlx.Tx) error {
+		if err := s.repository.Finish(ctx, tx, delivery, expected); err != nil {
+			return err
+		}
+		delivery.Version = expected + 1
+		return s.addDeliveryEvent(ctx, tx, delivery, "platform.notification.v1.NotificationStatusChanged", "platform.notification.status.changed.v1")
+	})
+	return delivery, translate(err)
 }
 func (s *Service) ListDeliveries(ctx context.Context, tenant, status string, page, pageSize int) (Page, error) {
 	if _, ok := principal.FromContext(ctx); !ok {
@@ -154,6 +220,12 @@ func toProtoDelivery(value Delivery) *notificationv1.Delivery {
 }
 func validChannel(v string) bool {
 	return v == "email" || v == "sms" || v == "webhook" || v == "in_app"
+}
+func validReceiptStatus(value string) bool {
+	return value == "delivered" || value == "bounced" || value == "failed"
+}
+func terminalDeliveryStatus(value string) bool {
+	return value == "delivered" || value == "bounced" || value == "failed" || value == "dead_letter"
 }
 func translate(err error) error {
 	if err == nil {

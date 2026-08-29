@@ -92,8 +92,10 @@ auth:
     enabled: false
     # Inject with APP_AUTH_PSK_KEY; never commit a real key.
     key: ""
-    http_paths: []
-    grpc_methods: []
+    http_paths:
+      - /api/v1/notifications/providers/receipt
+    grpc_methods:
+      - /platform.notification.v1.NotificationService/RecordProviderReceipt
 cron:
   enabled: true
   timezone: Asia/Shanghai
@@ -139,6 +141,9 @@ notification:
   batch_size: 100
   max_attempts: 8
   retry_base: 5s
+  tenant_limit: {rate: 1000, burst: 100, period: 1m}
+  template_limit: {rate: 300, burst: 50, period: 1m}
+  recipient_limit: {rate: 10, burst: 3, period: 1h}
   providers: {}
 
 # Named outbound clients. Put environment-specific endpoints and credentials in

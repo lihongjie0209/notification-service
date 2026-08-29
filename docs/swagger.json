@@ -142,6 +142,50 @@
                 }
             }
         },
+        "/api/v1/notifications/providers/receipt": {
+            "post": {
+                "security": [
+                    {
+                        "PSK": []
+                    }
+                ],
+                "tags": [
+                    "notification"
+                ],
+                "summary": "Record an authenticated provider delivery receipt",
+                "parameters": [
+                    {
+                        "description": "Provider receipt",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/httptransport.ProviderReceiptRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/httptransport.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "body": {
+                                            "$ref": "#/definitions/notification.Delivery"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/notifications/send": {
             "post": {
                 "security": [
@@ -427,6 +471,32 @@
             "type": "object",
             "properties": {
                 "subject": {
+                    "type": "string"
+                }
+            }
+        },
+        "httptransport.ProviderReceiptRequest": {
+            "type": "object",
+            "required": [
+                "provider",
+                "provider_message_id",
+                "status",
+                "tenant_id"
+            ],
+            "properties": {
+                "failure_reason": {
+                    "type": "string"
+                },
+                "provider": {
+                    "type": "string"
+                },
+                "provider_message_id": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "tenant_id": {
                     "type": "string"
                 }
             }

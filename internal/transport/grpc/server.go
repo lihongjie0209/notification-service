@@ -96,6 +96,13 @@ func (s *notificationServer) Send(ctx context.Context, r *notificationv1.SendReq
 	}
 	return &notificationv1.SendResponse{Delivery: toProtoDelivery(v)}, nil
 }
+func (s *notificationServer) RecordProviderReceipt(ctx context.Context, r *notificationv1.RecordProviderReceiptRequest) (*notificationv1.RecordProviderReceiptResponse, error) {
+	v, err := s.service.RecordReceipt(ctx, r.GetTenantId(), r.GetProvider(), r.GetProviderMessageId(), r.GetStatus(), r.GetFailureReason())
+	if err != nil {
+		return nil, grpcError(err)
+	}
+	return &notificationv1.RecordProviderReceiptResponse{Delivery: toProtoDelivery(v)}, nil
+}
 func (s *notificationServer) GetDelivery(ctx context.Context, r *notificationv1.GetDeliveryRequest) (*notificationv1.GetDeliveryResponse, error) {
 	v, err := s.service.GetDelivery(ctx, r.GetId(), r.GetTenantId())
 	if err != nil {

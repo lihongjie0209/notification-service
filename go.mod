@@ -14,7 +14,7 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/jackc/pgx/v5 v5.9.2
 	github.com/jmoiron/sqlx v1.4.0
-	github.com/lihongjie0209/platform-protos v0.1.0
+	github.com/lihongjie0209/platform-protos v0.3.0
 	github.com/nats-io/nats.go v1.53.1
 	github.com/prometheus/client_golang v1.24.1
 	github.com/redis/go-redis/extra/redisotel/v9 v9.22.0

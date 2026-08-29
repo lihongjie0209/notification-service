@@ -18,6 +18,7 @@ type Repository interface {
 	UpdateTemplate(context.Context, sqlx.ExtContext, Template, int64) error
 	GetDelivery(context.Context, string, string) (Delivery, error)
 	GetDeliveryByKey(context.Context, string, string) (Delivery, error)
+	GetDeliveryByProviderMessage(context.Context, string, string, string) (Delivery, error)
 	InsertDelivery(context.Context, sqlx.ExtContext, Delivery) error
 	ListDeliveries(context.Context, string, string, int, int) ([]Delivery, int64, error)
 	ClaimDue(context.Context, *sqlx.Tx, time.Time, int) ([]Delivery, error)
@@ -105,6 +106,14 @@ func (r *SQLRepository) GetDelivery(ctx context.Context, id, tenant string) (Del
 func (r *SQLRepository) GetDeliveryByKey(ctx context.Context, tenant, key string) (Delivery, error) {
 	var v Delivery
 	err := r.db.GetContext(ctx, &v, r.db.Rebind(`SELECT `+deliveryColumns+` FROM notification_deliveries WHERE tenant_id=? AND idempotency_key=?`), tenant, key)
+	if errors.Is(err, sql.ErrNoRows) {
+		err = ErrNotFound
+	}
+	return v, err
+}
+func (r *SQLRepository) GetDeliveryByProviderMessage(ctx context.Context, tenant, provider, messageID string) (Delivery, error) {
+	var v Delivery
+	err := r.db.GetContext(ctx, &v, r.db.Rebind(`SELECT `+deliveryColumns+` FROM notification_deliveries WHERE tenant_id=? AND provider=? AND provider_message_id=?`), tenant, provider, messageID)
 	if errors.Is(err, sql.ErrNoRows) {
 		err = ErrNotFound
 	}

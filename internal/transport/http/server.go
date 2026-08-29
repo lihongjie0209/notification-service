@@ -62,6 +62,7 @@ func NewServer(lc fx.Lifecycle, cfg config.Config, handler *Handler, authService
 	api.POST("/me", handler.Me)
 	api.POST("/notifications/templates/put", handler.PutNotificationTemplate)
 	api.POST("/notifications/send", handler.SendNotification)
+	api.POST("/notifications/providers/receipt", handler.RecordProviderReceipt)
 	api.POST("/notifications/deliveries/get", handler.GetNotificationDelivery)
 	api.POST("/notifications/deliveries/list", handler.ListNotificationDeliveries)
 	server := &http.Server{Addr: cfg.HTTP.Address, Handler: router, ReadTimeout: cfg.HTTP.ReadTimeout, WriteTimeout: cfg.HTTP.WriteTimeout, IdleTimeout: cfg.HTTP.IdleTimeout}

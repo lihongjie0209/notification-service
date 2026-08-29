@@ -2,13 +2,18 @@ package notification
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/DATA-DOG/go-sqlmock"
+	"github.com/alicebob/miniredis/v2"
 	"github.com/jmoiron/sqlx"
+	"github.com/lihongjie0209/notification-service/internal/config"
 	"github.com/lihongjie0209/notification-service/internal/database"
 	"github.com/lihongjie0209/notification-service/internal/principal"
+	"github.com/lihongjie0209/notification-service/internal/ratelimit"
+	"github.com/redis/go-redis/v9"
 )
 
 type fakeRepo struct {
@@ -44,6 +49,12 @@ func (f *fakeRepo) GetDeliveryByKey(context.Context, string, string) (Delivery, 
 	}
 	return f.delivery, nil
 }
+func (f *fakeRepo) GetDeliveryByProviderMessage(context.Context, string, string, string) (Delivery, error) {
+	if f.delivery.ID == "" {
+		return Delivery{}, ErrNotFound
+	}
+	return f.delivery, nil
+}
 func (f *fakeRepo) InsertDelivery(_ context.Context, _ sqlx.ExtContext, v Delivery) error {
 	f.delivery = v
 	return nil
@@ -54,7 +65,14 @@ func (f *fakeRepo) ListDeliveries(context.Context, string, string, int, int) ([]
 func (f *fakeRepo) ClaimDue(context.Context, *sqlx.Tx, time.Time, int) ([]Delivery, error) {
 	return nil, nil
 }
-func (f *fakeRepo) Finish(context.Context, sqlx.ExtContext, Delivery, int64) error { return nil }
+func (f *fakeRepo) Finish(_ context.Context, _ sqlx.ExtContext, value Delivery, expected int64) error {
+	if f.delivery.Version != expected {
+		return ErrStaleVersion
+	}
+	value.Version = expected + 1
+	f.delivery = value
+	return nil
+}
 func TestSendIsIdempotent(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	if err != nil {
@@ -62,7 +80,7 @@ func TestSendIsIdempotent(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = db.Close() })
 	repo := &fakeRepo{template: Template{ID: "tpl-1", Status: "active"}}
-	service := NewService(repo, database.NewTransactor(sqlx.NewDb(db, "sqlmock")))
+	service := NewService(repo, database.NewTransactor(sqlx.NewDb(db, "sqlmock")), nil, config.Config{})
 	service.now = func() time.Time { return time.Date(2026, 8, 30, 8, 0, 0, 0, time.FixedZone("UTC+8", 8*3600)) }
 	ctx := principal.WithContext(t.Context(), principal.Principal{Subject: "user-1"})
 	mock.ExpectBegin()
@@ -83,10 +101,62 @@ func TestSendIsIdempotent(t *testing.T) {
 	}
 }
 func TestPutTemplateRejectsInvalidSyntax(t *testing.T) {
-	service := NewService(&fakeRepo{}, &database.Transactor{})
+	service := NewService(&fakeRepo{}, &database.Transactor{}, nil, config.Config{})
 	ctx := principal.WithContext(t.Context(), principal.Principal{Subject: "admin"})
 	if _, err := service.PutTemplate(ctx, Template{TenantID: "t", Code: "welcome", Channel: "email", Locale: "zh-cn", Content: "{{"}, 0); err == nil {
 		t.Fatal("invalid template accepted")
+	}
+}
+func TestSendEnforcesRecipientFrequencyLimit(t *testing.T) {
+	server := miniredis.RunT(t)
+	client := redis.NewClient(&redis.Options{Addr: server.Addr()})
+	t.Cleanup(func() { _ = client.Close() })
+	cfg := config.Config{RateLimit: config.RateLimit{Enabled: true}, Notification: config.Notification{
+		TenantLimit:    config.RateLimitRule{Rate: 100, Burst: 100, Period: time.Hour},
+		TemplateLimit:  config.RateLimitRule{Rate: 100, Burst: 100, Period: time.Hour},
+		RecipientLimit: config.RateLimitRule{Rate: 1, Burst: 1, Period: time.Hour},
+	}}
+	repo := &fakeRepo{template: Template{ID: "tpl-1", Status: "active"}}
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+	mock.ExpectBegin()
+	mock.ExpectCommit()
+	service := NewService(repo, database.NewTransactor(sqlx.NewDb(db, "sqlmock")), ratelimit.New(client, cfg), cfg)
+	ctx := principal.WithContext(t.Context(), principal.Principal{Subject: "user-1"})
+	if _, err := service.Send(ctx, "tenant-1", "welcome", "email", "zh-cn", "a@example.com", "send-1", nil); err != nil {
+		t.Fatal(err)
+	}
+	repo.delivery = Delivery{}
+	if _, err := service.Send(ctx, "tenant-1", "welcome", "email", "zh-cn", "a@example.com", "send-2", nil); err == nil || !strings.Contains(err.Error(), "too many requests") {
+		t.Fatalf("second request error=%v", err)
+	}
+}
+func TestRecordReceiptIsTransactionalAndIdempotent(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+	now := time.Date(2026, 8, 30, 8, 0, 0, 0, time.FixedZone("UTC+8", 8*3600))
+	repo := &fakeRepo{delivery: Delivery{ID: "delivery-1", TenantID: "tenant-1", Provider: "email", ProviderMessageID: "provider-1", Status: "sent", Version: 2, CreatedAt: now, UpdatedAt: now}}
+	service := NewService(repo, database.NewTransactor(sqlx.NewDb(db, "sqlmock")), nil, config.Config{})
+	service.now = func() time.Time { return now }
+	ctx := principal.WithContext(t.Context(), principal.Principal{Subject: "provider:email"})
+	mock.ExpectBegin()
+	mock.ExpectCommit()
+	delivered, err := service.RecordReceipt(ctx, "tenant-1", "email", "provider-1", "delivered", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if delivered.Status != "delivered" || delivered.Version != 3 || len(repo.outbox) != 1 {
+		t.Fatalf("delivered=%+v outbox=%+v", delivered, repo.outbox)
+	}
+	replayed, err := service.RecordReceipt(ctx, "tenant-1", "email", "provider-1", "delivered", "")
+	if err != nil || replayed.Version != delivered.Version || len(repo.outbox) != 1 {
+		t.Fatalf("replayed=%+v err=%v outbox=%d", replayed, err, len(repo.outbox))
 	}
 }
 func TestRenderRejectsMissingVariableAndBackoffIsBounded(t *testing.T) {

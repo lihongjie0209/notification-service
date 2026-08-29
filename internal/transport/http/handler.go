@@ -50,6 +50,13 @@ type ListDeliveriesRequest struct {
 	Page     int    `json:"page"`
 	PageSize int    `json:"page_size"`
 }
+type ProviderReceiptRequest struct {
+	TenantID          string `json:"tenant_id" binding:"required"`
+	Provider          string `json:"provider" binding:"required"`
+	ProviderMessageID string `json:"provider_message_id" binding:"required"`
+	Status            string `json:"status" binding:"required"`
+	FailureReason     string `json:"failure_reason"`
+}
 
 type MeResponseBody struct {
 	Subject string `json:"subject"`
@@ -145,6 +152,27 @@ func (h *Handler) SendNotification(c *gin.Context) {
 		return
 	}
 	v, err := h.notifications.Send(c.Request.Context(), r.TenantID, r.TemplateCode, r.Channel, r.Locale, r.Recipient, r.IdempotencyKey, r.Variables)
+	if err != nil {
+		Fail(c, h.logger, err)
+		return
+	}
+	OK(c, v)
+}
+
+// RecordProviderReceipt godoc
+// @Summary Record an authenticated provider delivery receipt
+// @Tags notification
+// @Security PSK
+// @Param request body ProviderReceiptRequest true "Provider receipt"
+// @Success 200 {object} Response{body=notification.Delivery}
+// @Router /api/v1/notifications/providers/receipt [post]
+func (h *Handler) RecordProviderReceipt(c *gin.Context) {
+	var r ProviderReceiptRequest
+	if err := c.ShouldBindJSON(&r); err != nil {
+		Fail(c, h.logger, apperror.Invalid("invalid json request", err))
+		return
+	}
+	v, err := h.notifications.RecordReceipt(c.Request.Context(), r.TenantID, r.Provider, r.ProviderMessageID, r.Status, r.FailureReason)
 	if err != nil {
 		Fail(c, h.logger, err)
 		return
