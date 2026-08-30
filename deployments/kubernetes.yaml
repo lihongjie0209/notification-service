@@ -36,8 +36,14 @@ kind: Deployment
 metadata:
   name: notification-service
   namespace: notification-service
+  annotations:
+    platform.swagger/enabled: "true"
+    platform.swagger/port: http
+    platform.swagger/path: /swagger/doc.json
+    platform.swagger/title: notification-service
   labels:
     app.kubernetes.io/name: notification-service
+    platform.swagger/enabled: "true"
 spec:
   replicas: 2
   revisionHistoryLimit: 5
@@ -196,6 +202,12 @@ spec:
   ingress:
     - from:
         - podSelector: {}
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: platform
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: swagger-service
       ports:
         - {port: 8080, protocol: TCP}
         - {port: 9090, protocol: TCP}
