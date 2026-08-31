@@ -2,6 +2,8 @@
 
 Production-oriented starter using Gin, Uber Fx, Viper, slog + lumberjack, sqlx, Redis, NATS JetStream, JWT, robfig/cron, and golang-migrate. Fork it or change the module path before starting a separate project.
 
+成功和死信投递记录默认保留 30 天，由服务自身按 500 条有界批次清理；生产环境可按合规要求覆盖保留期，并在删除前通过数据导出或 CDC 归档到对象存储/分析库。当前保留 `(tenant_id, idempotency_key)` 全局唯一约束，因此不直接按时间分区；当实测容量达到分区阈值时，应先把幂等身份演进为包含时间桶的契约，再由 PostgreSQL 原生分区和可选 `pg_partman` 管理分区。
+
 
 ## Quick start
 

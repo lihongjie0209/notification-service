@@ -21,6 +21,26 @@ func TestLoad_EnvironmentOverridesFile(t *testing.T) {
 	if cfg.HTTP.Address != "127.0.0.1:9090" {
 		t.Fatalf("HTTP.Address = %q, want %q", cfg.HTTP.Address, "127.0.0.1:9090")
 	}
+	if cfg.Notification.Retention != 30*24*time.Hour || cfg.Notification.CleanupInterval != time.Hour || cfg.Notification.CleanupBatchSize != 500 {
+		t.Fatalf("unexpected notification retention defaults: %+v", cfg.Notification)
+	}
+}
+
+func TestLoad_NotificationRetentionEnvironmentOverrides(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.yaml")
+	if err := os.WriteFile(path, []byte("http:\n  address: 127.0.0.1:8080\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("APP_NOTIFICATION_RETENTION", "2160h")
+	t.Setenv("APP_NOTIFICATION_CLEANUP_BATCH_SIZE", "250")
+
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if cfg.Notification.Retention != 90*24*time.Hour || cfg.Notification.CleanupBatchSize != 250 {
+		t.Fatalf("unexpected environment overrides: %+v", cfg.Notification)
+	}
 }
 
 func TestConfig_ValidateJWTSecret(t *testing.T) {

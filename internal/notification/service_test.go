@@ -73,6 +73,9 @@ func (f *fakeRepo) Finish(_ context.Context, _ sqlx.ExtContext, value Delivery, 
 	f.delivery = value
 	return nil
 }
+func (f *fakeRepo) DeleteTerminalDeliveriesBefore(context.Context, time.Time, int) (int64, error) {
+	return 0, nil
+}
 func TestSendIsIdempotent(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	if err != nil {

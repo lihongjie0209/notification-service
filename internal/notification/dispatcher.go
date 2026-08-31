@@ -229,4 +229,4 @@ func (w *Worker) stop(context.Context) error {
 	return nil
 }
 
-var WorkerModule = fx.Module("notification-worker", fx.Provide(NewSenderRegistry, NewDispatcher, NewWorker), fx.Invoke(func(*Worker) {}))
+var WorkerModule = fx.Module("notification-worker", fx.Provide(NewSenderRegistry, NewDispatcher, NewWorker, NewRetentionCleaner), fx.Invoke(func(*Worker, *RetentionCleaner) {}))

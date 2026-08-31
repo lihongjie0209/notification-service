@@ -208,6 +208,9 @@ type Notification struct {
 	BatchSize        int                             `mapstructure:"batch_size"`
 	MaxAttempts      int32                           `mapstructure:"max_attempts"`
 	RetryBase        time.Duration                   `mapstructure:"retry_base"`
+	Retention        time.Duration                   `mapstructure:"retention"`
+	CleanupInterval  time.Duration                   `mapstructure:"cleanup_interval"`
+	CleanupBatchSize int                             `mapstructure:"cleanup_batch_size"`
 	TenantLimit      RateLimitRule                   `mapstructure:"tenant_limit"`
 	TemplateLimit    RateLimitRule                   `mapstructure:"template_limit"`
 	RecipientLimit   RateLimitRule                   `mapstructure:"recipient_limit"`
@@ -435,6 +438,9 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("notification.batch_size", 100)
 	v.SetDefault("notification.max_attempts", 8)
 	v.SetDefault("notification.retry_base", "5s")
+	v.SetDefault("notification.retention", "720h")
+	v.SetDefault("notification.cleanup_interval", "1h")
+	v.SetDefault("notification.cleanup_batch_size", 500)
 	setRateLimitDefaults(v, "notification.tenant_limit", 1000, 100)
 	setRateLimitDefaults(v, "notification.template_limit", 300, 50)
 	setRateLimitDefaults(v, "notification.recipient_limit", 10, 3)
@@ -558,6 +564,9 @@ func (c Config) Validate() error {
 	}
 	if c.Notification.DispatchInterval <= 0 || c.Notification.BatchSize <= 0 || c.Notification.MaxAttempts <= 0 || c.Notification.RetryBase <= 0 {
 		return errors.New("notification worker values must be positive")
+	}
+	if c.Notification.Retention <= 0 || c.Notification.CleanupInterval <= 0 || c.Notification.CleanupBatchSize <= 0 {
+		return errors.New("notification retention values must be positive")
 	}
 	for name, upstream := range c.Outbound.HTTP {
 		if upstream.BaseURL == "" || upstream.Timeout <= 0 {

@@ -141,6 +141,9 @@ notification:
   batch_size: 100
   max_attempts: 8
   retry_base: 5s
+  retention: 720h
+  cleanup_interval: 1h
+  cleanup_batch_size: 500
   tenant_limit: {rate: 1000, burst: 100, period: 1m}
   template_limit: {rate: 300, burst: 50, period: 1m}
   recipient_limit: {rate: 10, burst: 3, period: 1h}

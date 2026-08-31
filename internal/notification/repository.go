@@ -23,6 +23,7 @@ type Repository interface {
 	ListDeliveries(context.Context, string, string, int, int) ([]Delivery, int64, error)
 	ClaimDue(context.Context, *sqlx.Tx, time.Time, int) ([]Delivery, error)
 	Finish(context.Context, sqlx.ExtContext, Delivery, int64) error
+	DeleteTerminalDeliveriesBefore(context.Context, time.Time, int) (int64, error)
 	AddOutbox(context.Context, sqlx.ExtContext, OutboxEvent) error
 }
 
@@ -134,4 +135,21 @@ func (r *SQLRepository) ListDeliveries(ctx context.Context, tenant, status strin
 	var values []Delivery
 	err := r.db.SelectContext(ctx, &values, r.db.Rebind(`SELECT `+deliveryColumns+` FROM notification_deliveries`+where+` ORDER BY created_at DESC,id DESC LIMIT ? OFFSET ?`), args...)
 	return values, total, err
+}
+
+func (r *SQLRepository) DeleteTerminalDeliveriesBefore(ctx context.Context, before time.Time, limit int) (int64, error) {
+	var ids []string
+	query := r.db.Rebind(`SELECT id FROM notification_deliveries WHERE status IN ('sent','dead_letter') AND updated_at<? ORDER BY updated_at,id LIMIT ?`)
+	if err := r.db.SelectContext(ctx, &ids, query, before, limit); err != nil || len(ids) == 0 {
+		return 0, err
+	}
+	query, args, err := sqlx.In(`DELETE FROM notification_deliveries WHERE id IN (?) AND status IN ('sent','dead_letter') AND updated_at<?`, ids, before)
+	if err != nil {
+		return 0, err
+	}
+	result, err := r.db.ExecContext(ctx, r.db.Rebind(query), args...)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
 }
