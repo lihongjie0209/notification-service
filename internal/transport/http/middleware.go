@@ -2,6 +2,7 @@ package httptransport
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"mime"
 	"net/http"
@@ -10,6 +11,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	platformauthz "github.com/lihongjie0209/microservice-platform-go/authz"
 	platformprincipal "github.com/lihongjie0209/microservice-platform-go/principal"
 	"github.com/lihongjie0209/notification-service/internal/apperror"
 	"github.com/lihongjie0209/notification-service/internal/auth"
@@ -219,9 +221,42 @@ func JWT(service *auth.Service, logger *slog.Logger) gin.HandlerFunc {
 			return
 		}
 		c.Set("subject", caller.ID)
-		c.Request = c.Request.WithContext(platformprincipal.WithContext(c.Request.Context(), caller))
+		ctx := platformprincipal.WithContext(c.Request.Context(), caller)
+		c.Request = c.Request.WithContext(platformauthz.WithCallerCredential(ctx, header))
 		c.Next()
 	}
+}
+
+func Authorization(enabled bool, authorizer platformauthz.Authorizer, logger *slog.Logger) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		requirement, protected := notificationHTTPRequirement(c.FullPath())
+		if !enabled || !protected {
+			c.Next()
+			return
+		}
+		if err := platformauthz.Enforce(c.Request.Context(), authorizer, requirement); err != nil {
+			if errors.Is(err, platformauthz.ErrDecisionUnavailable) {
+				Fail(c, logger, apperror.Unavailable("authorization decision is unavailable", err))
+				return
+			}
+			Fail(c, logger, apperror.Forbidden("permission denied"))
+			return
+		}
+		c.Next()
+	}
+}
+
+func notificationHTTPRequirement(route string) (platformauthz.Requirement, bool) {
+	requirements := map[string]platformauthz.Requirement{
+		"/api/v1/notifications/templates/put":     {Resource: "notification.template", Action: "update", Scope: platformauthz.ScopePrincipal},
+		"/api/v1/notifications/templates/list":    {Resource: "notification.template", Action: "list", Scope: platformauthz.ScopePrincipal},
+		"/api/v1/notifications/send":              {Resource: "notification.delivery", Action: "send", Scope: platformauthz.ScopePrincipal},
+		"/api/v1/notifications/providers/receipt": {Resource: "notification.receipt", Action: "record", Scope: platformauthz.ScopePlatform},
+		"/api/v1/notifications/deliveries/get":    {Resource: "notification.delivery", Action: "read", Scope: platformauthz.ScopePrincipal},
+		"/api/v1/notifications/deliveries/list":   {Resource: "notification.delivery", Action: "list", Scope: platformauthz.ScopePrincipal},
+	}
+	requirement, ok := requirements[route]
+	return requirement, ok
 }
 
 func Authentication(service *auth.Service, logger *slog.Logger, cfg config.Auth) gin.HandlerFunc {
@@ -233,7 +268,8 @@ func Authentication(service *auth.Service, logger *slog.Logger, cfg config.Auth)
 				return
 			}
 			c.Set("subject", "psk")
-			c.Request = c.Request.WithContext(platformprincipal.WithContext(c.Request.Context(), platformprincipal.Principal{ID: "notification-service:psk", Type: platformprincipal.TypeServiceAccount}))
+			ctx := platformprincipal.WithContext(c.Request.Context(), platformprincipal.Principal{ID: "notification-service:psk", Type: platformprincipal.TypeServiceAccount})
+			c.Request = c.Request.WithContext(platformauthz.WithCallerCredential(ctx, c.GetHeader("Authorization")))
 			c.Next()
 			return
 		}

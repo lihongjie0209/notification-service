@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	platformauthz "github.com/lihongjie0209/microservice-platform-go/authz"
 	platformprincipal "github.com/lihongjie0209/microservice-platform-go/principal"
 	"github.com/lihongjie0209/notification-service/internal/apperror"
 	"github.com/lihongjie0209/notification-service/internal/auth"
@@ -45,11 +46,11 @@ type Server struct {
 	logger  *slog.Logger
 }
 
-func NewServer(lc fx.Lifecycle, cfg config.Config, authService *auth.Service, healthService *apphealth.Service, notificationService *notificationdomain.Service, metrics *observability.Metrics, logger *slog.Logger) (*Server, error) {
+func NewServer(lc fx.Lifecycle, cfg config.Config, authService *auth.Service, authorizer platformauthz.Authorizer, healthService *apphealth.Service, notificationService *notificationdomain.Service, metrics *observability.Metrics, logger *slog.Logger) (*Server, error) {
 	options := []grpc.ServerOption{
 		grpc.MaxRecvMsgSize(cfg.GRPC.MaxReceiveBytes),
 		grpc.StatsHandler(otelgrpc.NewServerHandler()),
-		grpc.ChainUnaryInterceptor(environmentInterceptor(cfg.Runtime.ActiveProfile), requestIDInterceptor, idempotencyInterceptor, recoveryInterceptor(logger), authInterceptor(authService, cfg.Auth), metricsInterceptor(metrics, logger)),
+		grpc.ChainUnaryInterceptor(environmentInterceptor(cfg.Runtime.ActiveProfile), requestIDInterceptor, idempotencyInterceptor, recoveryInterceptor(logger), authInterceptor(authService, cfg.Auth), platformauthz.UnaryServerInterceptor(authorizer, notificationGRPCRequirement(cfg.Authorization.Enabled)), metricsInterceptor(metrics, logger)),
 		grpc.ChainStreamInterceptor(environmentStreamInterceptor(cfg.Runtime.ActiveProfile), requestIDStreamInterceptor, idempotencyStreamInterceptor, recoveryStreamInterceptor(logger), authStreamInterceptor(authService, cfg.Auth), metricsStreamInterceptor(metrics, logger)),
 	}
 	if cfg.GRPC.TLS.Enabled {
@@ -70,6 +71,24 @@ func NewServer(lc fx.Lifecycle, cfg config.Config, authService *auth.Service, he
 	return server, nil
 }
 
+func notificationGRPCRequirement(enabled bool) platformauthz.GRPCResolver {
+	return func(method string) (platformauthz.Requirement, bool) {
+		if !enabled {
+			return platformauthz.Requirement{}, false
+		}
+		requirements := map[string]platformauthz.Requirement{
+			notificationv1.NotificationService_PutTemplate_FullMethodName:           {Resource: "notification.template", Action: "update", Scope: platformauthz.ScopePrincipal},
+			notificationv1.NotificationService_ListTemplates_FullMethodName:         {Resource: "notification.template", Action: "list", Scope: platformauthz.ScopePrincipal},
+			notificationv1.NotificationService_Send_FullMethodName:                  {Resource: "notification.delivery", Action: "send", Scope: platformauthz.ScopePrincipal},
+			notificationv1.NotificationService_RecordProviderReceipt_FullMethodName: {Resource: "notification.receipt", Action: "record", Scope: platformauthz.ScopePlatform},
+			notificationv1.NotificationService_GetDelivery_FullMethodName:           {Resource: "notification.delivery", Action: "read", Scope: platformauthz.ScopePrincipal},
+			notificationv1.NotificationService_ListDeliveries_FullMethodName:        {Resource: "notification.delivery", Action: "list", Scope: platformauthz.ScopePrincipal},
+		}
+		requirement, ok := requirements[method]
+		return requirement, ok
+	}
+}
+
 type notificationServer struct {
 	notificationv1.UnimplementedNotificationServiceServer
 	service *notificationdomain.Service
@@ -85,6 +104,21 @@ func (s *notificationServer) PutTemplate(ctx context.Context, r *notificationv1.
 		return nil, grpcError(err)
 	}
 	return &notificationv1.PutTemplateResponse{Template: toProtoTemplate(result)}, nil
+}
+func (s *notificationServer) ListTemplates(ctx context.Context, r *notificationv1.ListTemplatesRequest) (*notificationv1.ListTemplatesResponse, error) {
+	page, pageSize := 0, 0
+	if r.GetPage() != nil {
+		page, pageSize = int(r.GetPage().GetPage()), int(r.GetPage().GetPageSize())
+	}
+	result, err := s.service.ListTemplates(ctx, r.GetTenantId(), r.GetKeyword(), r.GetChannel(), r.GetStatus(), page, pageSize)
+	if err != nil {
+		return nil, grpcError(err)
+	}
+	response := &notificationv1.ListTemplatesResponse{Page: &commonv1.PageResult{Total: uint64(result.Total), Page: uint32(result.Page), PageSize: uint32(result.PageSize)}}
+	for _, value := range result.Templates {
+		response.Templates = append(response.Templates, toProtoTemplate(value))
+	}
+	return response, nil
 }
 func (s *notificationServer) Send(ctx context.Context, r *notificationv1.SendRequest) (*notificationv1.SendResponse, error) {
 	v, err := s.service.Send(ctx, r.GetTenantId(), r.GetTemplateCode(), r.GetChannel(), r.GetLocale(), r.GetRecipient(), r.GetIdempotencyKey(), r.GetVariables())

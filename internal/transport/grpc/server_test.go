@@ -4,13 +4,35 @@ import (
 	"testing"
 	"time"
 
+	platformauthz "github.com/lihongjie0209/microservice-platform-go/authz"
 	platformprincipal "github.com/lihongjie0209/microservice-platform-go/principal"
 	"github.com/lihongjie0209/notification-service/internal/auth"
 	"github.com/lihongjie0209/notification-service/internal/config"
+	notificationv1 "github.com/lihongjie0209/platform-protos/gen/go/platform/notification/v1"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 )
+
+func TestNotificationGRPCRequirementCoversMethodsAndScopes(t *testing.T) {
+	t.Parallel()
+	resolve := notificationGRPCRequirement(true)
+	methods := []string{notificationv1.NotificationService_PutTemplate_FullMethodName, notificationv1.NotificationService_ListTemplates_FullMethodName, notificationv1.NotificationService_Send_FullMethodName, notificationv1.NotificationService_RecordProviderReceipt_FullMethodName, notificationv1.NotificationService_GetDelivery_FullMethodName, notificationv1.NotificationService_ListDeliveries_FullMethodName}
+	for _, method := range methods {
+		requirement, ok := resolve(method)
+		if !ok || requirement.Resource == "" || requirement.Action == "" {
+			t.Fatalf("method %q requirement = %+v, %v", method, requirement, ok)
+		}
+	}
+	receipt, _ := resolve(notificationv1.NotificationService_RecordProviderReceipt_FullMethodName)
+	list, _ := resolve(notificationv1.NotificationService_ListTemplates_FullMethodName)
+	if receipt.Scope != platformauthz.ScopePlatform || list.Scope != platformauthz.ScopePrincipal {
+		t.Fatalf("unexpected scopes: receipt=%v list=%v", receipt.Scope, list.Scope)
+	}
+	if _, ok := notificationGRPCRequirement(false)(notificationv1.NotificationService_Send_FullMethodName); ok {
+		t.Fatal("disabled authorization must not enforce")
+	}
+}
 
 func TestAuthenticateGRPC_PSKWildcard(t *testing.T) {
 	t.Parallel()

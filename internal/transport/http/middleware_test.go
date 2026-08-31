@@ -1,6 +1,7 @@
 package httptransport
 
 import (
+	"context"
 	"encoding/json"
 	"io"
 	"log/slog"
@@ -10,10 +11,57 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	platformauthz "github.com/lihongjie0209/microservice-platform-go/authz"
 	platformprincipal "github.com/lihongjie0209/microservice-platform-go/principal"
 	"github.com/lihongjie0209/notification-service/internal/auth"
 	"github.com/lihongjie0209/notification-service/internal/config"
 )
+
+type authorizationStub struct{ err error }
+
+func (a authorizationStub) Authorize(context.Context, platformprincipal.Principal, platformauthz.Requirement) error {
+	return a.err
+}
+
+func TestNotificationHTTPRequirementCoversRoutesAndScopes(t *testing.T) {
+	t.Parallel()
+	routes := []string{"/api/v1/notifications/templates/put", "/api/v1/notifications/templates/list", "/api/v1/notifications/send", "/api/v1/notifications/providers/receipt", "/api/v1/notifications/deliveries/get", "/api/v1/notifications/deliveries/list"}
+	for _, route := range routes {
+		requirement, ok := notificationHTTPRequirement(route)
+		if !ok || requirement.Resource == "" || requirement.Action == "" {
+			t.Fatalf("route %q requirement = %+v, %v", route, requirement, ok)
+		}
+	}
+	receipt, _ := notificationHTTPRequirement("/api/v1/notifications/providers/receipt")
+	send, _ := notificationHTTPRequirement("/api/v1/notifications/send")
+	if receipt.Scope != platformauthz.ScopePlatform || send.Scope != platformauthz.ScopePrincipal {
+		t.Fatalf("unexpected scopes: receipt=%v send=%v", receipt.Scope, send.Scope)
+	}
+}
+
+func TestAuthorizationFailsClosedAndClassifiesOutage(t *testing.T) {
+	t.Parallel()
+	gin.SetMode(gin.TestMode)
+	for _, test := range []struct {
+		name   string
+		err    error
+		status int
+	}{{"denied", platformauthz.ErrDenied, http.StatusForbidden}, {"unavailable", platformauthz.ErrDecisionUnavailable, http.StatusServiceUnavailable}} {
+		t.Run(test.name, func(t *testing.T) {
+			router := gin.New()
+			router.Use(RequestID(), func(c *gin.Context) {
+				c.Request = c.Request.WithContext(platformprincipal.WithContext(c.Request.Context(), platformprincipal.Principal{ID: "user-1", Type: platformprincipal.TypeUser, TenantID: "tenant-1", MembershipID: "membership-1"}))
+				c.Next()
+			}, Authorization(true, authorizationStub{test.err}, slog.New(slog.NewTextHandler(io.Discard, nil))))
+			router.POST("/api/v1/notifications/send", func(c *gin.Context) { OK(c, nil) })
+			recorder := httptest.NewRecorder()
+			router.ServeHTTP(recorder, httptest.NewRequest(http.MethodPost, "/api/v1/notifications/send", nil))
+			if recorder.Code != test.status {
+				t.Fatalf("status = %d, want %d", recorder.Code, test.status)
+			}
+		})
+	}
+}
 
 func TestRequestID(t *testing.T) {
 	t.Parallel()
