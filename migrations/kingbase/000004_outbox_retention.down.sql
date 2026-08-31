@@ -1,0 +1,1 @@
+DROP INDEX notification_outbox_retention_idx;
