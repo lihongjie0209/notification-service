@@ -91,7 +91,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "body": {
-                                            "$ref": "#/definitions/notification.Delivery"
+                                            "$ref": "#/definitions/httptransport.DeliveryResponseBody"
                                         }
                                     }
                                 }
@@ -135,7 +135,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "body": {
-                                            "$ref": "#/definitions/notification.Page"
+                                            "$ref": "#/definitions/httptransport.DeliveryPageResponseBody"
                                         }
                                     }
                                 }
@@ -179,7 +179,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "body": {
-                                            "$ref": "#/definitions/notification.Delivery"
+                                            "$ref": "#/definitions/httptransport.DeliveryResponseBody"
                                         }
                                     }
                                 }
@@ -223,7 +223,51 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "body": {
-                                            "$ref": "#/definitions/notification.Delivery"
+                                            "$ref": "#/definitions/httptransport.DeliveryResponseBody"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/notifications/templates/list": {
+            "post": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "tags": [
+                    "notification"
+                ],
+                "summary": "List notification templates",
+                "parameters": [
+                    {
+                        "description": "Template filter",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/httptransport.ListTemplatesRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/httptransport.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "body": {
+                                            "$ref": "#/definitions/httptransport.TemplatePageResponseBody"
                                         }
                                     }
                                 }
@@ -267,7 +311,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "body": {
-                                            "$ref": "#/definitions/notification.Template"
+                                            "$ref": "#/definitions/httptransport.TemplateResponseBody"
                                         }
                                     }
                                 }
@@ -435,6 +479,86 @@ const docTemplate = `{
                 }
             }
         },
+        "httptransport.DeliveryPageResponseBody": {
+            "type": "object",
+            "properties": {
+                "deliveries": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/httptransport.DeliveryResponseBody"
+                    }
+                },
+                "page": {
+                    "type": "integer"
+                },
+                "page_size": {
+                    "type": "integer"
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
+        "httptransport.DeliveryResponseBody": {
+            "type": "object",
+            "properties": {
+                "attempts": {
+                    "type": "integer"
+                },
+                "channel": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "created_by": {
+                    "type": "string"
+                },
+                "failure_reason": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "idempotency_key": {
+                    "type": "string"
+                },
+                "locale": {
+                    "type": "string"
+                },
+                "next_attempt_at": {
+                    "type": "string"
+                },
+                "provider": {
+                    "type": "string"
+                },
+                "provider_message_id": {
+                    "type": "string"
+                },
+                "recipient": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "template_code": {
+                    "type": "string"
+                },
+                "tenant_id": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "updated_by": {
+                    "type": "string"
+                },
+                "variables": {},
+                "version": {
+                    "type": "integer"
+                }
+            }
+        },
         "httptransport.GetDeliveryRequest": {
             "type": "object",
             "required": [
@@ -456,6 +580,32 @@ const docTemplate = `{
                 "tenant_id"
             ],
             "properties": {
+                "page": {
+                    "type": "integer"
+                },
+                "page_size": {
+                    "type": "integer"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "tenant_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "httptransport.ListTemplatesRequest": {
+            "type": "object",
+            "required": [
+                "tenant_id"
+            ],
+            "properties": {
+                "channel": {
+                    "type": "string"
+                },
+                "keyword": {
+                    "type": "string"
+                },
                 "page": {
                     "type": "integer"
                 },
@@ -592,92 +742,27 @@ const docTemplate = `{
                 }
             }
         },
-        "notification.Delivery": {
+        "httptransport.TemplatePageResponseBody": {
             "type": "object",
             "properties": {
-                "attempts": {
-                    "type": "integer"
-                },
-                "channel": {
-                    "type": "string"
-                },
-                "created_at": {
-                    "type": "string"
-                },
-                "created_by": {
-                    "type": "string"
-                },
-                "failure_reason": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "string"
-                },
-                "idempotency_key": {
-                    "type": "string"
-                },
-                "locale": {
-                    "type": "string"
-                },
-                "next_attempt_at": {
-                    "type": "string"
-                },
-                "provider": {
-                    "type": "string"
-                },
-                "provider_message_id": {
-                    "type": "string"
-                },
-                "recipient": {
-                    "type": "string"
-                },
-                "status": {
-                    "type": "string"
-                },
-                "template_code": {
-                    "type": "string"
-                },
-                "tenant_id": {
-                    "type": "string"
-                },
-                "updated_at": {
-                    "type": "string"
-                },
-                "updated_by": {
-                    "type": "string"
-                },
-                "variables": {
-                    "type": "array",
-                    "items": {
-                        "type": "integer"
-                    }
-                },
-                "version": {
-                    "type": "integer"
-                }
-            }
-        },
-        "notification.Page": {
-            "type": "object",
-            "properties": {
-                "deliveries": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/notification.Delivery"
-                    }
-                },
                 "page": {
                     "type": "integer"
                 },
                 "page_size": {
                     "type": "integer"
                 },
+                "templates": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/httptransport.TemplateResponseBody"
+                    }
+                },
                 "total": {
                     "type": "integer"
                 }
             }
         },
-        "notification.Template": {
+        "httptransport.TemplateResponseBody": {
             "type": "object",
             "properties": {
                 "channel": {

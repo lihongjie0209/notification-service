@@ -1,7 +1,9 @@
 package httptransport
 
 import (
+	"encoding/json"
 	"log/slog"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/lihongjie0209/notification-service/internal/apperror"
@@ -40,6 +42,14 @@ type SendNotificationRequest struct {
 	Variables      map[string]string `json:"variables"`
 	IdempotencyKey string            `json:"idempotency_key" binding:"required"`
 }
+type ListTemplatesRequest struct {
+	TenantID string `json:"tenant_id" binding:"required"`
+	Keyword  string `json:"keyword"`
+	Channel  string `json:"channel"`
+	Status   string `json:"status"`
+	Page     int    `json:"page"`
+	PageSize int    `json:"page_size"`
+}
 type GetDeliveryRequest struct {
 	ID       string `json:"id" binding:"required"`
 	TenantID string `json:"tenant_id" binding:"required"`
@@ -56,6 +66,58 @@ type ProviderReceiptRequest struct {
 	ProviderMessageID string `json:"provider_message_id" binding:"required"`
 	Status            string `json:"status" binding:"required"`
 	FailureReason     string `json:"failure_reason"`
+}
+
+type TemplatePageResponseBody struct {
+	Templates []TemplateResponseBody `json:"templates"`
+	Total     int64                  `json:"total"`
+	Page      int                    `json:"page"`
+	PageSize  int                    `json:"page_size"`
+}
+
+type TemplateResponseBody struct {
+	ID        string    `json:"id"`
+	TenantID  string    `json:"tenant_id"`
+	Code      string    `json:"code"`
+	Channel   string    `json:"channel"`
+	Locale    string    `json:"locale"`
+	Subject   string    `json:"subject"`
+	Content   string    `json:"content"`
+	Status    string    `json:"status"`
+	Version   int64     `json:"version"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+	CreatedBy string    `json:"created_by"`
+	UpdatedBy string    `json:"updated_by"`
+}
+
+type DeliveryResponseBody struct {
+	ID                string    `json:"id"`
+	TenantID          string    `json:"tenant_id"`
+	TemplateCode      string    `json:"template_code"`
+	Channel           string    `json:"channel"`
+	Locale            string    `json:"locale"`
+	Recipient         string    `json:"recipient"`
+	Variables         any       `json:"variables"`
+	IdempotencyKey    string    `json:"idempotency_key"`
+	Status            string    `json:"status"`
+	Provider          string    `json:"provider"`
+	ProviderMessageID string    `json:"provider_message_id"`
+	FailureReason     string    `json:"failure_reason"`
+	Attempts          int32     `json:"attempts"`
+	NextAttemptAt     time.Time `json:"next_attempt_at"`
+	Version           int64     `json:"version"`
+	CreatedAt         time.Time `json:"created_at"`
+	UpdatedAt         time.Time `json:"updated_at"`
+	CreatedBy         string    `json:"created_by"`
+	UpdatedBy         string    `json:"updated_by"`
+}
+
+type DeliveryPageResponseBody struct {
+	Deliveries []DeliveryResponseBody `json:"deliveries"`
+	Total      int64                  `json:"total"`
+	Page       int                    `json:"page"`
+	PageSize   int                    `json:"page_size"`
 }
 
 type MeResponseBody struct {
@@ -122,7 +184,7 @@ func (h *Handler) Version(c *gin.Context) { OK(c, buildinfo.Current()) }
 // @Tags notification
 // @Security Bearer
 // @Param request body PutTemplateRequest true "Template"
-// @Success 200 {object} Response{body=notification.Template}
+// @Success 200 {object} Response{body=TemplateResponseBody}
 // @Router /api/v1/notifications/templates/put [post]
 func (h *Handler) PutNotificationTemplate(c *gin.Context) {
 	var r PutTemplateRequest
@@ -135,7 +197,32 @@ func (h *Handler) PutNotificationTemplate(c *gin.Context) {
 		Fail(c, h.logger, err)
 		return
 	}
-	OK(c, v)
+	OK(c, templateResponse(v))
+}
+
+// ListNotificationTemplates godoc
+// @Summary List notification templates
+// @Tags notification
+// @Security Bearer
+// @Param request body ListTemplatesRequest true "Template filter"
+// @Success 200 {object} Response{body=TemplatePageResponseBody}
+// @Router /api/v1/notifications/templates/list [post]
+func (h *Handler) ListNotificationTemplates(c *gin.Context) {
+	var request ListTemplatesRequest
+	if err := c.ShouldBindJSON(&request); err != nil {
+		Fail(c, h.logger, apperror.Invalid("invalid json request", err))
+		return
+	}
+	page, err := h.notifications.ListTemplates(c.Request.Context(), request.TenantID, request.Keyword, request.Channel, request.Status, request.Page, request.PageSize)
+	if err != nil {
+		Fail(c, h.logger, err)
+		return
+	}
+	templates := make([]TemplateResponseBody, 0, len(page.Templates))
+	for _, item := range page.Templates {
+		templates = append(templates, templateResponse(item))
+	}
+	OK(c, TemplatePageResponseBody{Templates: templates, Total: page.Total, Page: page.Page, PageSize: page.PageSize})
 }
 
 // SendNotification godoc
@@ -143,7 +230,7 @@ func (h *Handler) PutNotificationTemplate(c *gin.Context) {
 // @Tags notification
 // @Security Bearer
 // @Param request body SendNotificationRequest true "Notification"
-// @Success 200 {object} Response{body=notification.Delivery}
+// @Success 200 {object} Response{body=DeliveryResponseBody}
 // @Router /api/v1/notifications/send [post]
 func (h *Handler) SendNotification(c *gin.Context) {
 	var r SendNotificationRequest
@@ -156,7 +243,7 @@ func (h *Handler) SendNotification(c *gin.Context) {
 		Fail(c, h.logger, err)
 		return
 	}
-	OK(c, v)
+	OK(c, deliveryResponse(v))
 }
 
 // RecordProviderReceipt godoc
@@ -164,7 +251,7 @@ func (h *Handler) SendNotification(c *gin.Context) {
 // @Tags notification
 // @Security PSK
 // @Param request body ProviderReceiptRequest true "Provider receipt"
-// @Success 200 {object} Response{body=notification.Delivery}
+// @Success 200 {object} Response{body=DeliveryResponseBody}
 // @Router /api/v1/notifications/providers/receipt [post]
 func (h *Handler) RecordProviderReceipt(c *gin.Context) {
 	var r ProviderReceiptRequest
@@ -177,7 +264,7 @@ func (h *Handler) RecordProviderReceipt(c *gin.Context) {
 		Fail(c, h.logger, err)
 		return
 	}
-	OK(c, v)
+	OK(c, deliveryResponse(v))
 }
 
 // GetNotificationDelivery godoc
@@ -185,7 +272,7 @@ func (h *Handler) RecordProviderReceipt(c *gin.Context) {
 // @Tags notification
 // @Security Bearer
 // @Param request body GetDeliveryRequest true "Delivery ID"
-// @Success 200 {object} Response{body=notification.Delivery}
+// @Success 200 {object} Response{body=DeliveryResponseBody}
 // @Router /api/v1/notifications/deliveries/get [post]
 func (h *Handler) GetNotificationDelivery(c *gin.Context) {
 	var r GetDeliveryRequest
@@ -198,7 +285,7 @@ func (h *Handler) GetNotificationDelivery(c *gin.Context) {
 		Fail(c, h.logger, err)
 		return
 	}
-	OK(c, v)
+	OK(c, deliveryResponse(v))
 }
 
 // ListNotificationDeliveries godoc
@@ -206,7 +293,7 @@ func (h *Handler) GetNotificationDelivery(c *gin.Context) {
 // @Tags notification
 // @Security Bearer
 // @Param request body ListDeliveriesRequest true "Delivery filter"
-// @Success 200 {object} Response{body=notification.Page}
+// @Success 200 {object} Response{body=DeliveryPageResponseBody}
 // @Router /api/v1/notifications/deliveries/list [post]
 func (h *Handler) ListNotificationDeliveries(c *gin.Context) {
 	var r ListDeliveriesRequest
@@ -219,7 +306,34 @@ func (h *Handler) ListNotificationDeliveries(c *gin.Context) {
 		Fail(c, h.logger, err)
 		return
 	}
-	OK(c, v)
+	responses := make([]DeliveryResponseBody, 0, len(v.Deliveries))
+	for _, delivery := range v.Deliveries {
+		responses = append(responses, deliveryResponse(delivery))
+	}
+	OK(c, DeliveryPageResponseBody{Deliveries: responses, Total: v.Total, Page: v.Page, PageSize: v.PageSize})
+}
+
+func deliveryResponse(value notificationdomain.Delivery) DeliveryResponseBody {
+	var variables any
+	if len(value.Variables) > 0 {
+		_ = json.Unmarshal(value.Variables, &variables)
+	}
+	return DeliveryResponseBody{
+		ID: value.ID, TenantID: value.TenantID, TemplateCode: value.TemplateCode, Channel: value.Channel,
+		Locale: value.Locale, Recipient: value.Recipient, Variables: variables, IdempotencyKey: value.IdempotencyKey,
+		Status: value.Status, Provider: value.Provider, ProviderMessageID: value.ProviderMessageID,
+		FailureReason: value.FailureReason, Attempts: value.Attempts, NextAttemptAt: value.NextAttemptAt,
+		Version: value.Version, CreatedAt: value.CreatedAt, UpdatedAt: value.UpdatedAt,
+		CreatedBy: value.CreatedBy, UpdatedBy: value.UpdatedBy,
+	}
+}
+
+func templateResponse(value notificationdomain.Template) TemplateResponseBody {
+	return TemplateResponseBody{
+		ID: value.ID, TenantID: value.TenantID, Code: value.Code, Channel: value.Channel, Locale: value.Locale,
+		Subject: value.Subject, Content: value.Content, Status: value.Status, Version: value.Version,
+		CreatedAt: value.CreatedAt, UpdatedAt: value.UpdatedAt, CreatedBy: value.CreatedBy, UpdatedBy: value.UpdatedBy,
+	}
 }
 
 // CreateUser godoc

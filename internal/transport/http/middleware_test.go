@@ -10,9 +10,9 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	platformprincipal "github.com/lihongjie0209/microservice-platform-go/principal"
 	"github.com/lihongjie0209/notification-service/internal/auth"
 	"github.com/lihongjie0209/notification-service/internal/config"
-	"github.com/lihongjie0209/notification-service/internal/principal"
 )
 
 func TestRequestID(t *testing.T) {
@@ -59,8 +59,8 @@ func TestAuthentication_PSKPrecedesSkipAndJWT(t *testing.T) {
 				PSK:           config.PSK{Enabled: true, Key: key, HTTPPaths: []string{"/api/v1/external/*"}},
 			}))
 			router.POST("/api/v1/external/callback", func(c *gin.Context) {
-				value, ok := principal.FromContext(c.Request.Context())
-				if test.status == http.StatusOK && (!ok || value.Subject != "psk" || value.Method != principal.AuthenticationPSK) {
+				value, ok := platformprincipal.FromContext(c.Request.Context())
+				if test.status == http.StatusOK && (!ok || value.ID != "notification-service:psk" || value.Type != platformprincipal.TypeServiceAccount) {
 					c.AbortWithStatus(http.StatusInternalServerError)
 					return
 				}

@@ -14,6 +14,7 @@ var ErrStaleVersion = errors.New("stale notification version")
 
 type Repository interface {
 	GetTemplate(context.Context, string, string, string, string) (Template, error)
+	ListTemplates(context.Context, string, string, string, string, int, int) ([]Template, int64, error)
 	InsertTemplate(context.Context, sqlx.ExtContext, Template) error
 	UpdateTemplate(context.Context, sqlx.ExtContext, Template, int64) error
 	GetDelivery(context.Context, string, string) (Delivery, error)
@@ -80,6 +81,20 @@ func (r *SQLRepository) GetTemplate(ctx context.Context, tenant, code, channel, 
 		err = ErrNotFound
 	}
 	return v, err
+}
+func (r *SQLRepository) ListTemplates(ctx context.Context, tenant, keyword, channel, status string, limit, offset int) ([]Template, int64, error) {
+	where := ` WHERE tenant_id=? AND (?='' OR code LIKE ? OR subject LIKE ?)` +
+		` AND (?='' OR channel=?) AND (?='' OR status=?)`
+	like := "%" + keyword + "%"
+	args := []any{tenant, keyword, like, like, channel, channel, status, status}
+	var total int64
+	if err := r.db.GetContext(ctx, &total, r.db.Rebind(`SELECT count(*) FROM notification_templates`+where), args...); err != nil {
+		return nil, 0, err
+	}
+	args = append(args, limit, offset)
+	var values []Template
+	err := r.db.SelectContext(ctx, &values, r.db.Rebind(`SELECT `+templateColumns+` FROM notification_templates`+where+` ORDER BY updated_at DESC,id DESC LIMIT ? OFFSET ?`), args...)
+	return values, total, err
 }
 func (r *SQLRepository) InsertTemplate(ctx context.Context, e sqlx.ExtContext, v Template) error {
 	_, err := e.ExecContext(ctx, r.db.Rebind(`INSERT INTO notification_templates (`+templateColumns+`) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`), v.ID, v.TenantID, v.Code, v.Channel, v.Locale, v.Subject, v.Content, v.Status, v.Version, v.CreatedAt, v.UpdatedAt, v.CreatedBy, v.UpdatedBy)

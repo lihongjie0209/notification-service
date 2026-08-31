@@ -11,10 +11,10 @@ import (
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
 	"github.com/lihongjie0209/microservice-platform-go/eventbus"
+	platformprincipal "github.com/lihongjie0209/microservice-platform-go/principal"
 	"github.com/lihongjie0209/notification-service/internal/apperror"
 	"github.com/lihongjie0209/notification-service/internal/config"
 	"github.com/lihongjie0209/notification-service/internal/database"
-	"github.com/lihongjie0209/notification-service/internal/principal"
 	"github.com/lihongjie0209/notification-service/internal/ratelimit"
 	notificationv1 "github.com/lihongjie0209/platform-protos/gen/go/platform/notification/v1"
 	"go.uber.org/fx"
@@ -44,9 +44,12 @@ func (s *Service) PutTemplate(ctx context.Context, v Template, expected int64) (
 	if _, err := template.New(v.Code).Parse(v.Subject + v.Content); err != nil {
 		return Template{}, apperror.Invalid("invalid template syntax", err)
 	}
-	caller, ok := principal.FromContext(ctx)
+	caller, ok := platformprincipal.FromContext(ctx)
 	if !ok {
 		return Template{}, apperror.Unauthorized("authenticated actor is required")
+	}
+	if err := enforceTenant(caller, v.TenantID); err != nil {
+		return Template{}, err
 	}
 	now := s.now()
 	current, err := s.repository.GetTemplate(ctx, v.TenantID, v.Code, v.Channel, v.Locale)
@@ -56,15 +59,15 @@ func (s *Service) PutTemplate(ctx context.Context, v Template, expected int64) (
 		v.Version = 1
 		v.CreatedAt = now
 		v.UpdatedAt = now
-		v.CreatedBy = caller.Subject
-		v.UpdatedBy = caller.Subject
+		v.CreatedBy = caller.ID
+		v.UpdatedBy = caller.ID
 		err = s.transactor.Within(ctx, nil, func(tx *sqlx.Tx) error { return s.repository.InsertTemplate(ctx, tx, v) })
 		return v, translate(err)
 	}
 	if err != nil {
 		return Template{}, translate(err)
 	}
-	current.Subject, current.Content, current.Status, current.UpdatedAt, current.UpdatedBy = v.Subject, v.Content, v.Status, now, caller.Subject
+	current.Subject, current.Content, current.Status, current.UpdatedAt, current.UpdatedBy = v.Subject, v.Content, v.Status, now, caller.ID
 	err = s.transactor.Within(ctx, nil, func(tx *sqlx.Tx) error { return s.repository.UpdateTemplate(ctx, tx, current, expected) })
 	current.Version = expected + 1
 	return current, translate(err)
@@ -78,6 +81,13 @@ func (s *Service) Send(ctx context.Context, tenant, code, channel, locale, recip
 	key = strings.TrimSpace(key)
 	if tenant == "" || code == "" || !validChannel(channel) || locale == "" || recipient == "" || key == "" {
 		return Delivery{}, apperror.Invalid("invalid notification request", nil)
+	}
+	caller, ok := platformprincipal.FromContext(ctx)
+	if !ok {
+		return Delivery{}, apperror.Unauthorized("authenticated actor is required")
+	}
+	if err := enforceTenant(caller, tenant); err != nil {
+		return Delivery{}, err
 	}
 	if existing, err := s.repository.GetDeliveryByKey(ctx, tenant, key); err == nil {
 		return existing, nil
@@ -98,12 +108,8 @@ func (s *Service) Send(ctx context.Context, tenant, code, channel, locale, recip
 	if err != nil {
 		return Delivery{}, apperror.Invalid("invalid variables", err)
 	}
-	caller, ok := principal.FromContext(ctx)
-	if !ok {
-		return Delivery{}, apperror.Unauthorized("authenticated actor is required")
-	}
 	now := s.now()
-	v := Delivery{ID: uuid.NewString(), TenantID: tenant, TemplateCode: code, Channel: channel, Locale: locale, Recipient: recipient, Variables: encoded, IdempotencyKey: key, Status: "pending", NextAttemptAt: now, Version: 1, CreatedAt: now, UpdatedAt: now, CreatedBy: caller.Subject, UpdatedBy: caller.Subject}
+	v := Delivery{ID: uuid.NewString(), TenantID: tenant, TemplateCode: code, Channel: channel, Locale: locale, Recipient: recipient, Variables: encoded, IdempotencyKey: key, Status: "pending", NextAttemptAt: now, Version: 1, CreatedAt: now, UpdatedAt: now, CreatedBy: caller.ID, UpdatedBy: caller.ID}
 	err = s.transactor.Within(ctx, nil, func(tx *sqlx.Tx) error {
 		if err := s.repository.InsertDelivery(ctx, tx, v); err != nil {
 			return err
@@ -139,8 +145,12 @@ func (s *Service) checkFrequency(ctx context.Context, tenant, code, channel, rec
 	return nil
 }
 func (s *Service) GetDelivery(ctx context.Context, id, tenant string) (Delivery, error) {
-	if _, ok := principal.FromContext(ctx); !ok {
+	caller, ok := platformprincipal.FromContext(ctx)
+	if !ok {
 		return Delivery{}, apperror.Unauthorized("authenticated actor is required")
+	}
+	if err := enforceTenant(caller, tenant); err != nil {
+		return Delivery{}, err
 	}
 	v, err := s.repository.GetDelivery(ctx, id, tenant)
 	return v, translate(err)
@@ -151,9 +161,12 @@ func (s *Service) RecordReceipt(ctx context.Context, tenant, provider, messageID
 	if tenant == "" || provider == "" || messageID == "" || !validReceiptStatus(statusValue) {
 		return Delivery{}, apperror.Invalid("invalid provider receipt", nil)
 	}
-	caller, ok := principal.FromContext(ctx)
+	caller, ok := platformprincipal.FromContext(ctx)
 	if !ok {
 		return Delivery{}, apperror.Unauthorized("authenticated actor is required")
+	}
+	if err := enforceTenant(caller, tenant); err != nil {
+		return Delivery{}, err
 	}
 	delivery, err := s.repository.GetDeliveryByProviderMessage(ctx, tenant, provider, messageID)
 	if err != nil {
@@ -167,7 +180,7 @@ func (s *Service) RecordReceipt(ctx context.Context, tenant, provider, messageID
 	}
 	now := s.now()
 	delivery.Status, delivery.FailureReason = statusValue, reason
-	delivery.UpdatedAt, delivery.UpdatedBy = now, caller.Subject
+	delivery.UpdatedAt, delivery.UpdatedBy = now, caller.ID
 	expected := delivery.Version
 	err = s.transactor.Within(ctx, nil, func(tx *sqlx.Tx) error {
 		if err := s.repository.Finish(ctx, tx, delivery, expected); err != nil {
@@ -179,8 +192,12 @@ func (s *Service) RecordReceipt(ctx context.Context, tenant, provider, messageID
 	return delivery, translate(err)
 }
 func (s *Service) ListDeliveries(ctx context.Context, tenant, status string, page, pageSize int) (Page, error) {
-	if _, ok := principal.FromContext(ctx); !ok {
+	caller, ok := platformprincipal.FromContext(ctx)
+	if !ok {
 		return Page{}, apperror.Unauthorized("authenticated actor is required")
+	}
+	if err := enforceTenant(caller, tenant); err != nil {
+		return Page{}, err
 	}
 	if page <= 0 {
 		page = 1
@@ -193,6 +210,38 @@ func (s *Service) ListDeliveries(ctx context.Context, tenant, status string, pag
 	}
 	v, total, err := s.repository.ListDeliveries(ctx, tenant, status, pageSize, (page-1)*pageSize)
 	return Page{Deliveries: v, Total: total, Page: page, PageSize: pageSize}, translate(err)
+}
+func (s *Service) ListTemplates(ctx context.Context, tenant, keyword, channel, status string, page, pageSize int) (TemplatePage, error) {
+	caller, ok := platformprincipal.FromContext(ctx)
+	if !ok {
+		return TemplatePage{}, apperror.Unauthorized("authenticated actor is required")
+	}
+	tenant, keyword = strings.TrimSpace(tenant), strings.TrimSpace(keyword)
+	channel, status = strings.ToLower(strings.TrimSpace(channel)), strings.ToLower(strings.TrimSpace(status))
+	if err := enforceTenant(caller, tenant); err != nil {
+		return TemplatePage{}, err
+	}
+	if channel != "" && !validChannel(channel) {
+		return TemplatePage{}, apperror.Invalid("invalid notification channel", nil)
+	}
+	if page <= 0 {
+		page = 1
+	}
+	if pageSize <= 0 {
+		pageSize = 20
+	}
+	if pageSize > 100 {
+		return TemplatePage{}, apperror.Invalid("page_size must not exceed 100", nil)
+	}
+	values, total, err := s.repository.ListTemplates(ctx, tenant, keyword, channel, status, pageSize, (page-1)*pageSize)
+	return TemplatePage{Templates: values, Total: total, Page: page, PageSize: pageSize}, translate(err)
+}
+
+func enforceTenant(caller platformprincipal.Principal, requestedTenantID string) error {
+	if caller.Type == platformprincipal.TypeUser && (strings.TrimSpace(caller.TenantID) == "" || caller.TenantID != strings.TrimSpace(requestedTenantID)) {
+		return apperror.Forbidden("tenant access denied")
+	}
+	return nil
 }
 func (s *Service) addDeliveryEvent(ctx context.Context, tx sqlx.ExtContext, delivery Delivery, eventType, subject string) error {
 	payload := &notificationv1.NotificationRequestedEvent{Delivery: toProtoDelivery(delivery)}

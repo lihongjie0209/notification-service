@@ -10,13 +10,13 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	platformprincipal "github.com/lihongjie0209/microservice-platform-go/principal"
 	"github.com/lihongjie0209/notification-service/internal/apperror"
 	"github.com/lihongjie0209/notification-service/internal/auth"
 	"github.com/lihongjie0209/notification-service/internal/config"
 	"github.com/lihongjie0209/notification-service/internal/environment"
 	"github.com/lihongjie0209/notification-service/internal/idempotency"
 	"github.com/lihongjie0209/notification-service/internal/observability"
-	"github.com/lihongjie0209/notification-service/internal/principal"
 	appLimit "github.com/lihongjie0209/notification-service/internal/ratelimit"
 	"github.com/lihongjie0209/notification-service/internal/requestid"
 	"go.opentelemetry.io/otel/trace"
@@ -218,8 +218,8 @@ func JWT(service *auth.Service, logger *slog.Logger) gin.HandlerFunc {
 			Fail(c, logger, apperror.Unauthorized("invalid or expired token"))
 			return
 		}
-		c.Set("subject", caller.Subject)
-		c.Request = c.Request.WithContext(principal.WithContext(c.Request.Context(), caller))
+		c.Set("subject", caller.ID)
+		c.Request = c.Request.WithContext(platformprincipal.WithContext(c.Request.Context(), caller))
 		c.Next()
 	}
 }
@@ -233,7 +233,7 @@ func Authentication(service *auth.Service, logger *slog.Logger, cfg config.Auth)
 				return
 			}
 			c.Set("subject", "psk")
-			c.Request = c.Request.WithContext(principal.WithContext(c.Request.Context(), principal.Principal{Subject: "psk", Method: principal.AuthenticationPSK}))
+			c.Request = c.Request.WithContext(platformprincipal.WithContext(c.Request.Context(), platformprincipal.Principal{ID: "notification-service:psk", Type: platformprincipal.TypeServiceAccount}))
 			c.Next()
 			return
 		}

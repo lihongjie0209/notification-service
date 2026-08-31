@@ -10,11 +10,11 @@ import (
 	"testing"
 	"time"
 
+	platformprincipal "github.com/lihongjie0209/microservice-platform-go/principal"
 	"github.com/lihongjie0209/notification-service/internal/config"
 	appdb "github.com/lihongjie0209/notification-service/internal/database"
 	"github.com/lihongjie0209/notification-service/internal/migration"
 	notificationdomain "github.com/lihongjie0209/notification-service/internal/notification"
-	"github.com/lihongjie0209/notification-service/internal/principal"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/modules/mysql"
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
@@ -58,10 +58,14 @@ func TestRepositoryAndMigrations(t *testing.T) {
 			}
 			t.Cleanup(func() { _ = db.Close() })
 			service := notificationdomain.NewService(notificationdomain.NewRepository(db), appdb.NewTransactor(db), nil, config.Config{})
-			actorCtx := principal.WithContext(ctx, principal.Principal{Subject: "admin-1", Method: principal.AuthenticationJWT})
+			actorCtx := platformprincipal.WithContext(ctx, platformprincipal.Principal{ID: "admin-1", Type: platformprincipal.TypeUser, TenantID: "tenant-1"})
 			template, err := service.PutTemplate(actorCtx, notificationdomain.Template{TenantID: "tenant-1", Code: "welcome", Channel: "email", Locale: "zh-cn", Subject: "Welcome", Content: "Hello {{.name}}"}, 0)
 			if err != nil || template.Version != 1 {
 				t.Fatalf("put template=%+v err=%v", template, err)
+			}
+			templates, err := service.ListTemplates(actorCtx, "tenant-1", "wel", "email", "active", 1, 20)
+			if err != nil || templates.Total != 1 || len(templates.Templates) != 1 || templates.Templates[0].ID != template.ID {
+				t.Fatalf("list templates=%+v err=%v", templates, err)
 			}
 			first, err := service.Send(actorCtx, "tenant-1", "welcome", "email", "zh-cn", "a@example.com", "send-1", map[string]string{"name": "Alice"})
 			if err != nil {
@@ -74,7 +78,7 @@ func TestRepositoryAndMigrations(t *testing.T) {
 			if _, err := db.ExecContext(ctx, db.Rebind(`UPDATE notification_deliveries SET status='sent',provider='email',provider_message_id='provider-1',version=version+1 WHERE id=?`), first.ID); err != nil {
 				t.Fatalf("simulate provider send: %v", err)
 			}
-			receiptCtx := principal.WithContext(ctx, principal.Principal{Subject: "provider:email", Method: principal.AuthenticationPSK})
+			receiptCtx := platformprincipal.SystemContext(ctx, "provider:email")
 			delivered, err := service.RecordReceipt(receiptCtx, "tenant-1", "email", "provider-1", "delivered", "")
 			if err != nil || delivered.Status != "delivered" || delivered.Version != 3 {
 				t.Fatalf("receipt=%+v err=%v", delivered, err)

@@ -44,6 +44,12 @@ type Page struct {
 	Page       int        `json:"page"`
 	PageSize   int        `json:"page_size"`
 }
+type TemplatePage struct {
+	Templates []Template `json:"templates"`
+	Total     int64      `json:"total"`
+	Page      int        `json:"page"`
+	PageSize  int        `json:"page_size"`
+}
 type OutboxEvent struct {
 	ID, Subject                       string
 	Envelope                          []byte

@@ -29,6 +29,59 @@ definitions:
       status:
         type: string
     type: object
+  httptransport.DeliveryPageResponseBody:
+    properties:
+      deliveries:
+        items:
+          $ref: '#/definitions/httptransport.DeliveryResponseBody'
+        type: array
+      page:
+        type: integer
+      page_size:
+        type: integer
+      total:
+        type: integer
+    type: object
+  httptransport.DeliveryResponseBody:
+    properties:
+      attempts:
+        type: integer
+      channel:
+        type: string
+      created_at:
+        type: string
+      created_by:
+        type: string
+      failure_reason:
+        type: string
+      id:
+        type: string
+      idempotency_key:
+        type: string
+      locale:
+        type: string
+      next_attempt_at:
+        type: string
+      provider:
+        type: string
+      provider_message_id:
+        type: string
+      recipient:
+        type: string
+      status:
+        type: string
+      template_code:
+        type: string
+      tenant_id:
+        type: string
+      updated_at:
+        type: string
+      updated_by:
+        type: string
+      variables: {}
+      version:
+        type: integer
+    type: object
   httptransport.GetDeliveryRequest:
     properties:
       id:
@@ -41,6 +94,23 @@ definitions:
     type: object
   httptransport.ListDeliveriesRequest:
     properties:
+      page:
+        type: integer
+      page_size:
+        type: integer
+      status:
+        type: string
+      tenant_id:
+        type: string
+    required:
+    - tenant_id
+    type: object
+  httptransport.ListTemplatesRequest:
+    properties:
+      channel:
+        type: string
+      keyword:
+        type: string
       page:
         type: integer
       page_size:
@@ -136,63 +206,20 @@ definitions:
     - template_code
     - tenant_id
     type: object
-  notification.Delivery:
+  httptransport.TemplatePageResponseBody:
     properties:
-      attempts:
-        type: integer
-      channel:
-        type: string
-      created_at:
-        type: string
-      created_by:
-        type: string
-      failure_reason:
-        type: string
-      id:
-        type: string
-      idempotency_key:
-        type: string
-      locale:
-        type: string
-      next_attempt_at:
-        type: string
-      provider:
-        type: string
-      provider_message_id:
-        type: string
-      recipient:
-        type: string
-      status:
-        type: string
-      template_code:
-        type: string
-      tenant_id:
-        type: string
-      updated_at:
-        type: string
-      updated_by:
-        type: string
-      variables:
-        items:
-          type: integer
-        type: array
-      version:
-        type: integer
-    type: object
-  notification.Page:
-    properties:
-      deliveries:
-        items:
-          $ref: '#/definitions/notification.Delivery'
-        type: array
       page:
         type: integer
       page_size:
         type: integer
+      templates:
+        items:
+          $ref: '#/definitions/httptransport.TemplateResponseBody'
+        type: array
       total:
         type: integer
     type: object
-  notification.Template:
+  httptransport.TemplateResponseBody:
     properties:
       channel:
         type: string
@@ -269,7 +296,7 @@ paths:
             - $ref: '#/definitions/httptransport.Response'
             - properties:
                 body:
-                  $ref: '#/definitions/notification.Delivery'
+                  $ref: '#/definitions/httptransport.DeliveryResponseBody'
               type: object
       security:
       - Bearer: []
@@ -293,7 +320,7 @@ paths:
             - $ref: '#/definitions/httptransport.Response'
             - properties:
                 body:
-                  $ref: '#/definitions/notification.Page'
+                  $ref: '#/definitions/httptransport.DeliveryPageResponseBody'
               type: object
       security:
       - Bearer: []
@@ -317,7 +344,7 @@ paths:
             - $ref: '#/definitions/httptransport.Response'
             - properties:
                 body:
-                  $ref: '#/definitions/notification.Delivery'
+                  $ref: '#/definitions/httptransport.DeliveryResponseBody'
               type: object
       security:
       - PSK: []
@@ -341,11 +368,35 @@ paths:
             - $ref: '#/definitions/httptransport.Response'
             - properties:
                 body:
-                  $ref: '#/definitions/notification.Delivery'
+                  $ref: '#/definitions/httptransport.DeliveryResponseBody'
               type: object
       security:
       - Bearer: []
       summary: Queue a notification for asynchronous delivery
+      tags:
+      - notification
+  /api/v1/notifications/templates/list:
+    post:
+      parameters:
+      - description: Template filter
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/httptransport.ListTemplatesRequest'
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/httptransport.Response'
+            - properties:
+                body:
+                  $ref: '#/definitions/httptransport.TemplatePageResponseBody'
+              type: object
+      security:
+      - Bearer: []
+      summary: List notification templates
       tags:
       - notification
   /api/v1/notifications/templates/put:
@@ -365,7 +416,7 @@ paths:
             - $ref: '#/definitions/httptransport.Response'
             - properties:
                 body:
-                  $ref: '#/definitions/notification.Template'
+                  $ref: '#/definitions/httptransport.TemplateResponseBody'
               type: object
       security:
       - Bearer: []

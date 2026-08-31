@@ -2,6 +2,7 @@ package notification
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -9,9 +10,10 @@ import (
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/alicebob/miniredis/v2"
 	"github.com/jmoiron/sqlx"
+	platformprincipal "github.com/lihongjie0209/microservice-platform-go/principal"
+	"github.com/lihongjie0209/notification-service/internal/apperror"
 	"github.com/lihongjie0209/notification-service/internal/config"
 	"github.com/lihongjie0209/notification-service/internal/database"
-	"github.com/lihongjie0209/notification-service/internal/principal"
 	"github.com/lihongjie0209/notification-service/internal/ratelimit"
 	"github.com/redis/go-redis/v9"
 )
@@ -32,6 +34,9 @@ func (f *fakeRepo) GetTemplate(context.Context, string, string, string, string) 
 		return Template{}, ErrNotFound
 	}
 	return f.template, nil
+}
+func (f *fakeRepo) ListTemplates(context.Context, string, string, string, string, int, int) ([]Template, int64, error) {
+	return []Template{f.template}, 1, nil
 }
 func (f *fakeRepo) InsertTemplate(_ context.Context, _ sqlx.ExtContext, v Template) error {
 	f.template = v
@@ -85,7 +90,7 @@ func TestSendIsIdempotent(t *testing.T) {
 	repo := &fakeRepo{template: Template{ID: "tpl-1", Status: "active"}}
 	service := NewService(repo, database.NewTransactor(sqlx.NewDb(db, "sqlmock")), nil, config.Config{})
 	service.now = func() time.Time { return time.Date(2026, 8, 30, 8, 0, 0, 0, time.FixedZone("UTC+8", 8*3600)) }
-	ctx := principal.WithContext(t.Context(), principal.Principal{Subject: "user-1"})
+	ctx := platformprincipal.WithContext(t.Context(), platformprincipal.Principal{ID: "user-1", Type: platformprincipal.TypeUser, TenantID: "tenant-1"})
 	mock.ExpectBegin()
 	mock.ExpectCommit()
 	first, err := service.Send(ctx, "tenant-1", "welcome", "email", "zh-cn", "a@example.com", "send-1", map[string]string{"name": "A"})
@@ -105,9 +110,18 @@ func TestSendIsIdempotent(t *testing.T) {
 }
 func TestPutTemplateRejectsInvalidSyntax(t *testing.T) {
 	service := NewService(&fakeRepo{}, &database.Transactor{}, nil, config.Config{})
-	ctx := principal.WithContext(t.Context(), principal.Principal{Subject: "admin"})
+	ctx := platformprincipal.WithContext(t.Context(), platformprincipal.Principal{ID: "admin", Type: platformprincipal.TypeUser, TenantID: "t"})
 	if _, err := service.PutTemplate(ctx, Template{TenantID: "t", Code: "welcome", Channel: "email", Locale: "zh-cn", Content: "{{"}, 0); err == nil {
 		t.Fatal("invalid template accepted")
+	}
+}
+func TestListTemplatesRejectsTenantOutsideJWTContext(t *testing.T) {
+	service := NewService(&fakeRepo{}, &database.Transactor{}, nil, config.Config{})
+	ctx := platformprincipal.WithContext(t.Context(), platformprincipal.Principal{ID: "admin", Type: platformprincipal.TypeUser, TenantID: "tenant-1"})
+	_, err := service.ListTemplates(ctx, "tenant-2", "", "", "", 1, 20)
+	var appErr *apperror.Error
+	if !errors.As(err, &appErr) || appErr.Code != apperror.CodeForbidden {
+		t.Fatalf("ListTemplates() error = %v, want forbidden", err)
 	}
 }
 func TestSendEnforcesRecipientFrequencyLimit(t *testing.T) {
@@ -128,7 +142,7 @@ func TestSendEnforcesRecipientFrequencyLimit(t *testing.T) {
 	mock.ExpectBegin()
 	mock.ExpectCommit()
 	service := NewService(repo, database.NewTransactor(sqlx.NewDb(db, "sqlmock")), ratelimit.New(client, cfg), cfg)
-	ctx := principal.WithContext(t.Context(), principal.Principal{Subject: "user-1"})
+	ctx := platformprincipal.WithContext(t.Context(), platformprincipal.Principal{ID: "user-1", Type: platformprincipal.TypeUser, TenantID: "tenant-1"})
 	if _, err := service.Send(ctx, "tenant-1", "welcome", "email", "zh-cn", "a@example.com", "send-1", nil); err != nil {
 		t.Fatal(err)
 	}
@@ -147,7 +161,7 @@ func TestRecordReceiptIsTransactionalAndIdempotent(t *testing.T) {
 	repo := &fakeRepo{delivery: Delivery{ID: "delivery-1", TenantID: "tenant-1", Provider: "email", ProviderMessageID: "provider-1", Status: "sent", Version: 2, CreatedAt: now, UpdatedAt: now}}
 	service := NewService(repo, database.NewTransactor(sqlx.NewDb(db, "sqlmock")), nil, config.Config{})
 	service.now = func() time.Time { return now }
-	ctx := principal.WithContext(t.Context(), principal.Principal{Subject: "provider:email"})
+	ctx := platformprincipal.SystemContext(t.Context(), "provider:email")
 	mock.ExpectBegin()
 	mock.ExpectCommit()
 	delivered, err := service.RecordReceipt(ctx, "tenant-1", "email", "provider-1", "delivered", "")
