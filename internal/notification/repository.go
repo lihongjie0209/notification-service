@@ -13,15 +13,15 @@ var ErrNotFound = errors.New("notification resource not found")
 var ErrStaleVersion = errors.New("stale notification version")
 
 type Repository interface {
-	GetTemplate(context.Context, string, string, string, string) (Template, error)
-	ListTemplates(context.Context, string, string, string, string, int, int) ([]Template, int64, error)
+	GetTemplate(context.Context, string, string, string, string, string) (Template, error)
+	ListTemplates(context.Context, string, string, string, string, string, int, int) ([]Template, int64, error)
 	InsertTemplate(context.Context, sqlx.ExtContext, Template) error
 	UpdateTemplate(context.Context, sqlx.ExtContext, Template, int64) error
-	GetDelivery(context.Context, string, string) (Delivery, error)
-	GetDeliveryByKey(context.Context, string, string) (Delivery, error)
-	GetDeliveryByProviderMessage(context.Context, string, string, string) (Delivery, error)
+	GetDelivery(context.Context, string, string, string) (Delivery, error)
+	GetDeliveryByKey(context.Context, string, string, string) (Delivery, error)
+	GetDeliveryByProviderMessage(context.Context, string, string, string, string) (Delivery, error)
 	InsertDelivery(context.Context, sqlx.ExtContext, Delivery) error
-	ListDeliveries(context.Context, string, string, int, int) ([]Delivery, int64, error)
+	ListDeliveries(context.Context, string, string, string, int, int) ([]Delivery, int64, error)
 	ClaimDue(context.Context, *sqlx.Tx, time.Time, int) ([]Delivery, error)
 	Finish(context.Context, sqlx.ExtContext, Delivery, int64) error
 	DeleteTerminalDeliveriesBefore(context.Context, time.Time, int) (int64, error)
@@ -71,22 +71,22 @@ type SQLRepository struct{ db *sqlx.DB }
 
 func NewRepository(db *sqlx.DB) Repository { return &SQLRepository{db: db} }
 
-const templateColumns = `id,tenant_id,code,channel,locale,subject,content,status,version,created_at,updated_at,created_by,updated_by`
-const deliveryColumns = `id,tenant_id,template_code,channel,locale,recipient,variables,idempotency_key,status,provider,provider_message_id,failure_reason,attempts,next_attempt_at,version,created_at,updated_at,created_by,updated_by`
+const templateColumns = `id,tenant_id,application_id,code,channel,locale,subject,content,status,version,created_at,updated_at,created_by,updated_by`
+const deliveryColumns = `id,tenant_id,application_id,template_code,channel,locale,recipient,variables,idempotency_key,status,provider,provider_message_id,failure_reason,attempts,next_attempt_at,version,created_at,updated_at,created_by,updated_by`
 
-func (r *SQLRepository) GetTemplate(ctx context.Context, tenant, code, channel, locale string) (Template, error) {
+func (r *SQLRepository) GetTemplate(ctx context.Context, tenant, application, code, channel, locale string) (Template, error) {
 	var v Template
-	err := r.db.GetContext(ctx, &v, r.db.Rebind(`SELECT `+templateColumns+` FROM notification_templates WHERE tenant_id=? AND code=? AND channel=? AND locale=?`), tenant, code, channel, locale)
+	err := r.db.GetContext(ctx, &v, r.db.Rebind(`SELECT `+templateColumns+` FROM notification_templates WHERE tenant_id=? AND application_id=? AND code=? AND channel=? AND locale=?`), tenant, application, code, channel, locale)
 	if errors.Is(err, sql.ErrNoRows) {
 		err = ErrNotFound
 	}
 	return v, err
 }
-func (r *SQLRepository) ListTemplates(ctx context.Context, tenant, keyword, channel, status string, limit, offset int) ([]Template, int64, error) {
-	where := ` WHERE tenant_id=? AND (?='' OR code LIKE ? OR subject LIKE ?)` +
+func (r *SQLRepository) ListTemplates(ctx context.Context, tenant, application, keyword, channel, status string, limit, offset int) ([]Template, int64, error) {
+	where := ` WHERE tenant_id=? AND application_id=? AND (?='' OR code LIKE ? OR subject LIKE ?)` +
 		` AND (?='' OR channel=?) AND (?='' OR status=?)`
 	like := "%" + keyword + "%"
-	args := []any{tenant, keyword, like, like, channel, channel, status, status}
+	args := []any{tenant, application, keyword, like, like, channel, channel, status, status}
 	var total int64
 	if err := r.db.GetContext(ctx, &total, r.db.Rebind(`SELECT count(*) FROM notification_templates`+where), args...); err != nil {
 		return nil, 0, err
@@ -97,7 +97,7 @@ func (r *SQLRepository) ListTemplates(ctx context.Context, tenant, keyword, chan
 	return values, total, err
 }
 func (r *SQLRepository) InsertTemplate(ctx context.Context, e sqlx.ExtContext, v Template) error {
-	_, err := e.ExecContext(ctx, r.db.Rebind(`INSERT INTO notification_templates (`+templateColumns+`) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`), v.ID, v.TenantID, v.Code, v.Channel, v.Locale, v.Subject, v.Content, v.Status, v.Version, v.CreatedAt, v.UpdatedAt, v.CreatedBy, v.UpdatedBy)
+	_, err := e.ExecContext(ctx, r.db.Rebind(`INSERT INTO notification_templates (`+templateColumns+`) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`), v.ID, v.TenantID, v.ApplicationID, v.Code, v.Channel, v.Locale, v.Subject, v.Content, v.Status, v.Version, v.CreatedAt, v.UpdatedAt, v.CreatedBy, v.UpdatedBy)
 	return err
 }
 func (r *SQLRepository) UpdateTemplate(ctx context.Context, e sqlx.ExtContext, v Template, expected int64) error {
@@ -111,37 +111,37 @@ func (r *SQLRepository) UpdateTemplate(ctx context.Context, e sqlx.ExtContext, v
 	}
 	return err
 }
-func (r *SQLRepository) GetDelivery(ctx context.Context, id, tenant string) (Delivery, error) {
+func (r *SQLRepository) GetDelivery(ctx context.Context, id, tenant, application string) (Delivery, error) {
 	var v Delivery
-	err := r.db.GetContext(ctx, &v, r.db.Rebind(`SELECT `+deliveryColumns+` FROM notification_deliveries WHERE id=? AND tenant_id=?`), id, tenant)
+	err := r.db.GetContext(ctx, &v, r.db.Rebind(`SELECT `+deliveryColumns+` FROM notification_deliveries WHERE id=? AND tenant_id=? AND application_id=?`), id, tenant, application)
 	if errors.Is(err, sql.ErrNoRows) {
 		err = ErrNotFound
 	}
 	return v, err
 }
-func (r *SQLRepository) GetDeliveryByKey(ctx context.Context, tenant, key string) (Delivery, error) {
+func (r *SQLRepository) GetDeliveryByKey(ctx context.Context, tenant, application, key string) (Delivery, error) {
 	var v Delivery
-	err := r.db.GetContext(ctx, &v, r.db.Rebind(`SELECT `+deliveryColumns+` FROM notification_deliveries WHERE tenant_id=? AND idempotency_key=?`), tenant, key)
+	err := r.db.GetContext(ctx, &v, r.db.Rebind(`SELECT `+deliveryColumns+` FROM notification_deliveries WHERE tenant_id=? AND application_id=? AND idempotency_key=?`), tenant, application, key)
 	if errors.Is(err, sql.ErrNoRows) {
 		err = ErrNotFound
 	}
 	return v, err
 }
-func (r *SQLRepository) GetDeliveryByProviderMessage(ctx context.Context, tenant, provider, messageID string) (Delivery, error) {
+func (r *SQLRepository) GetDeliveryByProviderMessage(ctx context.Context, tenant, application, provider, messageID string) (Delivery, error) {
 	var v Delivery
-	err := r.db.GetContext(ctx, &v, r.db.Rebind(`SELECT `+deliveryColumns+` FROM notification_deliveries WHERE tenant_id=? AND provider=? AND provider_message_id=?`), tenant, provider, messageID)
+	err := r.db.GetContext(ctx, &v, r.db.Rebind(`SELECT `+deliveryColumns+` FROM notification_deliveries WHERE tenant_id=? AND application_id=? AND provider=? AND provider_message_id=?`), tenant, application, provider, messageID)
 	if errors.Is(err, sql.ErrNoRows) {
 		err = ErrNotFound
 	}
 	return v, err
 }
 func (r *SQLRepository) InsertDelivery(ctx context.Context, e sqlx.ExtContext, v Delivery) error {
-	_, err := e.ExecContext(ctx, r.db.Rebind(`INSERT INTO notification_deliveries (`+deliveryColumns+`) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`), v.ID, v.TenantID, v.TemplateCode, v.Channel, v.Locale, v.Recipient, v.Variables, v.IdempotencyKey, v.Status, v.Provider, v.ProviderMessageID, v.FailureReason, v.Attempts, v.NextAttemptAt, v.Version, v.CreatedAt, v.UpdatedAt, v.CreatedBy, v.UpdatedBy)
+	_, err := e.ExecContext(ctx, r.db.Rebind(`INSERT INTO notification_deliveries (`+deliveryColumns+`) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`), v.ID, v.TenantID, v.ApplicationID, v.TemplateCode, v.Channel, v.Locale, v.Recipient, v.Variables, v.IdempotencyKey, v.Status, v.Provider, v.ProviderMessageID, v.FailureReason, v.Attempts, v.NextAttemptAt, v.Version, v.CreatedAt, v.UpdatedAt, v.CreatedBy, v.UpdatedBy)
 	return err
 }
-func (r *SQLRepository) ListDeliveries(ctx context.Context, tenant, status string, limit, offset int) ([]Delivery, int64, error) {
-	where := ` WHERE tenant_id=? AND (?='' OR status=?)`
-	args := []any{tenant, status, status}
+func (r *SQLRepository) ListDeliveries(ctx context.Context, tenant, application, status string, limit, offset int) ([]Delivery, int64, error) {
+	where := ` WHERE tenant_id=? AND application_id=? AND (?='' OR status=?)`
+	args := []any{tenant, application, status, status}
 	var total int64
 	if err := r.db.GetContext(ctx, &total, r.db.Rebind(`SELECT count(*) FROM notification_deliveries`+where), args...); err != nil {
 		return nil, 0, err

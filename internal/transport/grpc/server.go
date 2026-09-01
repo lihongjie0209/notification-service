@@ -99,7 +99,7 @@ func (s *notificationServer) PutTemplate(ctx context.Context, r *notificationv1.
 		return nil, status.Error(codes.InvalidArgument, "template is required")
 	}
 	v := r.GetTemplate()
-	result, err := s.service.PutTemplate(ctx, notificationdomain.Template{TenantID: v.GetTenantId(), Code: v.GetCode(), Channel: v.GetChannel(), Locale: v.GetLocale(), Subject: v.GetSubject(), Content: v.GetContent(), Status: v.GetStatus()}, r.GetExpectedVersion())
+	result, err := s.service.PutTemplate(ctx, notificationdomain.Template{TenantID: v.GetTenantId(), ApplicationID: v.GetApplicationId(), Code: v.GetCode(), Channel: v.GetChannel(), Locale: v.GetLocale(), Subject: v.GetSubject(), Content: v.GetContent(), Status: v.GetStatus()}, r.GetExpectedVersion())
 	if err != nil {
 		return nil, grpcError(err)
 	}
@@ -110,7 +110,7 @@ func (s *notificationServer) ListTemplates(ctx context.Context, r *notificationv
 	if r.GetPage() != nil {
 		page, pageSize = int(r.GetPage().GetPage()), int(r.GetPage().GetPageSize())
 	}
-	result, err := s.service.ListTemplates(ctx, r.GetTenantId(), r.GetKeyword(), r.GetChannel(), r.GetStatus(), page, pageSize)
+	result, err := s.service.ListTemplates(ctx, r.GetTenantId(), r.GetApplicationId(), r.GetKeyword(), r.GetChannel(), r.GetStatus(), page, pageSize)
 	if err != nil {
 		return nil, grpcError(err)
 	}
@@ -121,21 +121,21 @@ func (s *notificationServer) ListTemplates(ctx context.Context, r *notificationv
 	return response, nil
 }
 func (s *notificationServer) Send(ctx context.Context, r *notificationv1.SendRequest) (*notificationv1.SendResponse, error) {
-	v, err := s.service.Send(ctx, r.GetTenantId(), r.GetTemplateCode(), r.GetChannel(), r.GetLocale(), r.GetRecipient(), r.GetIdempotencyKey(), r.GetVariables())
+	v, err := s.service.Send(ctx, r.GetTenantId(), r.GetApplicationId(), r.GetTemplateCode(), r.GetChannel(), r.GetLocale(), r.GetRecipient(), r.GetIdempotencyKey(), r.GetVariables())
 	if err != nil {
 		return nil, grpcError(err)
 	}
 	return &notificationv1.SendResponse{Delivery: toProtoDelivery(v)}, nil
 }
 func (s *notificationServer) RecordProviderReceipt(ctx context.Context, r *notificationv1.RecordProviderReceiptRequest) (*notificationv1.RecordProviderReceiptResponse, error) {
-	v, err := s.service.RecordReceipt(ctx, r.GetTenantId(), r.GetProvider(), r.GetProviderMessageId(), r.GetStatus(), r.GetFailureReason())
+	v, err := s.service.RecordReceipt(ctx, r.GetTenantId(), r.GetApplicationId(), r.GetProvider(), r.GetProviderMessageId(), r.GetStatus(), r.GetFailureReason())
 	if err != nil {
 		return nil, grpcError(err)
 	}
 	return &notificationv1.RecordProviderReceiptResponse{Delivery: toProtoDelivery(v)}, nil
 }
 func (s *notificationServer) GetDelivery(ctx context.Context, r *notificationv1.GetDeliveryRequest) (*notificationv1.GetDeliveryResponse, error) {
-	v, err := s.service.GetDelivery(ctx, r.GetId(), r.GetTenantId())
+	v, err := s.service.GetDelivery(ctx, r.GetId(), r.GetTenantId(), r.GetApplicationId())
 	if err != nil {
 		return nil, grpcError(err)
 	}
@@ -146,7 +146,7 @@ func (s *notificationServer) ListDeliveries(ctx context.Context, r *notification
 	if r.GetPage() != nil {
 		page, pageSize = int(r.GetPage().GetPage()), int(r.GetPage().GetPageSize())
 	}
-	result, err := s.service.ListDeliveries(ctx, r.GetTenantId(), r.GetStatus(), page, pageSize)
+	result, err := s.service.ListDeliveries(ctx, r.GetTenantId(), r.GetApplicationId(), r.GetStatus(), page, pageSize)
 	if err != nil {
 		return nil, grpcError(err)
 	}
@@ -157,12 +157,12 @@ func (s *notificationServer) ListDeliveries(ctx context.Context, r *notification
 	return response, nil
 }
 func toProtoTemplate(v notificationdomain.Template) *notificationv1.Template {
-	return &notificationv1.Template{Id: v.ID, TenantId: v.TenantID, Code: v.Code, Channel: v.Channel, Locale: v.Locale, Subject: v.Subject, Content: v.Content, Status: v.Status, Version: v.Version, CreatedAt: timestamppb.New(v.CreatedAt), UpdatedAt: timestamppb.New(v.UpdatedAt), CreatedBy: v.CreatedBy, UpdatedBy: v.UpdatedBy}
+	return &notificationv1.Template{Id: v.ID, TenantId: v.TenantID, ApplicationId: v.ApplicationID, Code: v.Code, Channel: v.Channel, Locale: v.Locale, Subject: v.Subject, Content: v.Content, Status: v.Status, Version: v.Version, CreatedAt: timestamppb.New(v.CreatedAt), UpdatedAt: timestamppb.New(v.UpdatedAt), CreatedBy: v.CreatedBy, UpdatedBy: v.UpdatedBy}
 }
 func toProtoDelivery(v notificationdomain.Delivery) *notificationv1.Delivery {
 	variables := map[string]string{}
 	_ = json.Unmarshal(v.Variables, &variables)
-	return &notificationv1.Delivery{Id: v.ID, TenantId: v.TenantID, TemplateCode: v.TemplateCode, Channel: v.Channel, Recipient: v.Recipient, Variables: variables, Status: v.Status, Provider: v.Provider, ProviderMessageId: v.ProviderMessageID, FailureReason: v.FailureReason, Attempts: v.Attempts, NextAttemptAt: timestamppb.New(v.NextAttemptAt), Version: v.Version, CreatedAt: timestamppb.New(v.CreatedAt), UpdatedAt: timestamppb.New(v.UpdatedAt), CreatedBy: v.CreatedBy, UpdatedBy: v.UpdatedBy}
+	return &notificationv1.Delivery{Id: v.ID, TenantId: v.TenantID, ApplicationId: v.ApplicationID, TemplateCode: v.TemplateCode, Channel: v.Channel, Recipient: v.Recipient, Variables: variables, Status: v.Status, Provider: v.Provider, ProviderMessageId: v.ProviderMessageID, FailureReason: v.FailureReason, Attempts: v.Attempts, NextAttemptAt: timestamppb.New(v.NextAttemptAt), Version: v.Version, CreatedAt: timestamppb.New(v.CreatedAt), UpdatedAt: timestamppb.New(v.UpdatedAt), CreatedBy: v.CreatedBy, UpdatedBy: v.UpdatedBy}
 }
 
 func (s *Server) start(enabled bool) func(context.Context) error {

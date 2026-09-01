@@ -59,19 +59,19 @@ func TestRepositoryAndMigrations(t *testing.T) {
 			t.Cleanup(func() { _ = db.Close() })
 			service := notificationdomain.NewService(notificationdomain.NewRepository(db), appdb.NewTransactor(db), nil, config.Config{})
 			actorCtx := platformprincipal.WithContext(ctx, platformprincipal.Principal{ID: "admin-1", Type: platformprincipal.TypeUser, TenantID: "tenant-1"})
-			template, err := service.PutTemplate(actorCtx, notificationdomain.Template{TenantID: "tenant-1", Code: "welcome", Channel: "email", Locale: "zh-cn", Subject: "Welcome", Content: "Hello {{.name}}"}, 0)
+			template, err := service.PutTemplate(actorCtx, notificationdomain.Template{TenantID: "tenant-1", ApplicationID: "app-1", Code: "welcome", Channel: "email", Locale: "zh-cn", Subject: "Welcome", Content: "Hello {{.name}}"}, 0)
 			if err != nil || template.Version != 1 {
 				t.Fatalf("put template=%+v err=%v", template, err)
 			}
-			templates, err := service.ListTemplates(actorCtx, "tenant-1", "wel", "email", "active", 1, 20)
+			templates, err := service.ListTemplates(actorCtx, "tenant-1", "app-1", "wel", "email", "active", 1, 20)
 			if err != nil || templates.Total != 1 || len(templates.Templates) != 1 || templates.Templates[0].ID != template.ID {
 				t.Fatalf("list templates=%+v err=%v", templates, err)
 			}
-			first, err := service.Send(actorCtx, "tenant-1", "welcome", "email", "zh-cn", "a@example.com", "send-1", map[string]string{"name": "Alice"})
+			first, err := service.Send(actorCtx, "tenant-1", "app-1", "welcome", "email", "zh-cn", "a@example.com", "send-1", map[string]string{"name": "Alice"})
 			if err != nil {
 				t.Fatalf("send: %v", err)
 			}
-			replay, err := service.Send(actorCtx, "tenant-1", "welcome", "email", "zh-cn", "a@example.com", "send-1", map[string]string{"name": "Alice"})
+			replay, err := service.Send(actorCtx, "tenant-1", "app-1", "welcome", "email", "zh-cn", "a@example.com", "send-1", map[string]string{"name": "Alice"})
 			if err != nil || replay.ID != first.ID {
 				t.Fatalf("replay=%+v err=%v", replay, err)
 			}
@@ -79,7 +79,7 @@ func TestRepositoryAndMigrations(t *testing.T) {
 				t.Fatalf("simulate provider send: %v", err)
 			}
 			receiptCtx := platformprincipal.SystemContext(ctx, "provider:email")
-			delivered, err := service.RecordReceipt(receiptCtx, "tenant-1", "email", "provider-1", "delivered", "")
+			delivered, err := service.RecordReceipt(receiptCtx, "tenant-1", "app-1", "email", "provider-1", "delivered", "")
 			if err != nil || delivered.Status != "delivered" || delivered.Version != 3 {
 				t.Fatalf("receipt=%+v err=%v", delivered, err)
 			}

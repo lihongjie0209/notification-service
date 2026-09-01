@@ -37,7 +37,7 @@ func New(cfg config.Config) *fx.App {
 		CacheModule,
 		EventBusModule,
 		fx.Provide(idempotency.New),
-		notification.Module,
+		NotificationModule,
 		notification.WorkerModule,
 		fx.Provide(observability.NewMetrics),
 		outbound.Module,

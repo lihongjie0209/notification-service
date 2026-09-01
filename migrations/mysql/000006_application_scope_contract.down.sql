@@ -1,0 +1,2 @@
+ALTER TABLE notification_deliveries DROP INDEX notification_delivery_scope_key_uq, DROP CHECK chk_notification_deliveries_application_nonempty, MODIFY COLUMN application_id VARCHAR(191) NULL, ADD UNIQUE KEY notification_delivery_key_uq(tenant_id,idempotency_key);
+ALTER TABLE notification_templates DROP INDEX notification_template_scope_uq, DROP CHECK chk_notification_templates_application_nonempty, MODIFY COLUMN application_id VARCHAR(191) NULL, ADD UNIQUE KEY notification_template_uq(tenant_id,code,channel,locale);

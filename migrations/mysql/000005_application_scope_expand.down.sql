@@ -1,0 +1,2 @@
+ALTER TABLE notification_deliveries DROP INDEX notification_deliveries_application_idx, DROP COLUMN application_id;
+ALTER TABLE notification_templates DROP INDEX notification_templates_application_idx, DROP COLUMN application_id;

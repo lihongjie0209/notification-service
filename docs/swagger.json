@@ -499,6 +499,9 @@
         "httptransport.DeliveryResponseBody": {
             "type": "object",
             "properties": {
+                "application_id": {
+                    "type": "string"
+                },
                 "attempts": {
                     "type": "integer"
                 },
@@ -559,10 +562,14 @@
         "httptransport.GetDeliveryRequest": {
             "type": "object",
             "required": [
+                "application_id",
                 "id",
                 "tenant_id"
             ],
             "properties": {
+                "application_id": {
+                    "type": "string"
+                },
                 "id": {
                     "type": "string"
                 },
@@ -574,9 +581,13 @@
         "httptransport.ListDeliveriesRequest": {
             "type": "object",
             "required": [
+                "application_id",
                 "tenant_id"
             ],
             "properties": {
+                "application_id": {
+                    "type": "string"
+                },
                 "page": {
                     "type": "integer"
                 },
@@ -594,9 +605,13 @@
         "httptransport.ListTemplatesRequest": {
             "type": "object",
             "required": [
+                "application_id",
                 "tenant_id"
             ],
             "properties": {
+                "application_id": {
+                    "type": "string"
+                },
                 "channel": {
                     "type": "string"
                 },
@@ -628,12 +643,16 @@
         "httptransport.ProviderReceiptRequest": {
             "type": "object",
             "required": [
+                "application_id",
                 "provider",
                 "provider_message_id",
                 "status",
                 "tenant_id"
             ],
             "properties": {
+                "application_id": {
+                    "type": "string"
+                },
                 "failure_reason": {
                     "type": "string"
                 },
@@ -654,6 +673,7 @@
         "httptransport.PutTemplateRequest": {
             "type": "object",
             "required": [
+                "application_id",
                 "channel",
                 "code",
                 "content",
@@ -661,6 +681,9 @@
                 "tenant_id"
             ],
             "properties": {
+                "application_id": {
+                    "type": "string"
+                },
                 "channel": {
                     "type": "string"
                 },
@@ -705,6 +728,7 @@
         "httptransport.SendNotificationRequest": {
             "type": "object",
             "required": [
+                "application_id",
                 "channel",
                 "idempotency_key",
                 "locale",
@@ -713,6 +737,9 @@
                 "tenant_id"
             ],
             "properties": {
+                "application_id": {
+                    "type": "string"
+                },
                 "channel": {
                     "type": "string"
                 },
@@ -762,6 +789,9 @@
         "httptransport.TemplateResponseBody": {
             "type": "object",
             "properties": {
+                "application_id": {
+                    "type": "string"
+                },
                 "channel": {
                     "type": "string"
                 },

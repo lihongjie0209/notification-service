@@ -1,0 +1,8 @@
+ALTER TABLE notification_templates ALTER COLUMN application_id SET NOT NULL;
+ALTER TABLE notification_deliveries ALTER COLUMN application_id SET NOT NULL;
+ALTER TABLE notification_templates ADD CONSTRAINT chk_notification_templates_application_nonempty CHECK(application_id <> '');
+ALTER TABLE notification_deliveries ADD CONSTRAINT chk_notification_deliveries_application_nonempty CHECK(application_id <> '');
+ALTER TABLE notification_templates DROP CONSTRAINT notification_templates_tenant_id_code_channel_locale_key;
+ALTER TABLE notification_templates ADD CONSTRAINT notification_templates_scope_code_key UNIQUE(tenant_id,application_id,code,channel,locale);
+ALTER TABLE notification_deliveries DROP CONSTRAINT notification_deliveries_tenant_id_idempotency_key_key;
+ALTER TABLE notification_deliveries ADD CONSTRAINT notification_deliveries_scope_idempotency_key UNIQUE(tenant_id,application_id,idempotency_key);

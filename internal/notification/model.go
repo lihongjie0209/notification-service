@@ -3,23 +3,25 @@ package notification
 import "time"
 
 type Template struct {
-	ID        string    `db:"id" json:"id"`
-	TenantID  string    `db:"tenant_id" json:"tenant_id"`
-	Code      string    `db:"code" json:"code"`
-	Channel   string    `db:"channel" json:"channel"`
-	Locale    string    `db:"locale" json:"locale"`
-	Subject   string    `db:"subject" json:"subject"`
-	Content   string    `db:"content" json:"content"`
-	Status    string    `db:"status" json:"status"`
-	Version   int64     `db:"version" json:"version"`
-	CreatedAt time.Time `db:"created_at" json:"created_at"`
-	UpdatedAt time.Time `db:"updated_at" json:"updated_at"`
-	CreatedBy string    `db:"created_by" json:"created_by"`
-	UpdatedBy string    `db:"updated_by" json:"updated_by"`
+	ID            string    `db:"id" json:"id"`
+	TenantID      string    `db:"tenant_id" json:"tenant_id"`
+	ApplicationID string    `db:"application_id" json:"application_id"`
+	Code          string    `db:"code" json:"code"`
+	Channel       string    `db:"channel" json:"channel"`
+	Locale        string    `db:"locale" json:"locale"`
+	Subject       string    `db:"subject" json:"subject"`
+	Content       string    `db:"content" json:"content"`
+	Status        string    `db:"status" json:"status"`
+	Version       int64     `db:"version" json:"version"`
+	CreatedAt     time.Time `db:"created_at" json:"created_at"`
+	UpdatedAt     time.Time `db:"updated_at" json:"updated_at"`
+	CreatedBy     string    `db:"created_by" json:"created_by"`
+	UpdatedBy     string    `db:"updated_by" json:"updated_by"`
 }
 type Delivery struct {
 	ID                string    `db:"id" json:"id"`
 	TenantID          string    `db:"tenant_id" json:"tenant_id"`
+	ApplicationID     string    `db:"application_id" json:"application_id"`
 	TemplateCode      string    `db:"template_code" json:"template_code"`
 	Channel           string    `db:"channel" json:"channel"`
 	Locale            string    `db:"locale" json:"locale"`

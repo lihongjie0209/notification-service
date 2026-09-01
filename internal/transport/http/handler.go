@@ -25,6 +25,7 @@ func NewHandler(healthService *health.Service, notificationService *notification
 
 type PutTemplateRequest struct {
 	TenantID        string `json:"tenant_id" binding:"required"`
+	ApplicationID   string `json:"application_id" binding:"required"`
 	Code            string `json:"code" binding:"required"`
 	Channel         string `json:"channel" binding:"required"`
 	Locale          string `json:"locale" binding:"required"`
@@ -35,6 +36,7 @@ type PutTemplateRequest struct {
 }
 type SendNotificationRequest struct {
 	TenantID       string            `json:"tenant_id" binding:"required"`
+	ApplicationID  string            `json:"application_id" binding:"required"`
 	TemplateCode   string            `json:"template_code" binding:"required"`
 	Channel        string            `json:"channel" binding:"required"`
 	Locale         string            `json:"locale" binding:"required"`
@@ -43,25 +45,29 @@ type SendNotificationRequest struct {
 	IdempotencyKey string            `json:"idempotency_key" binding:"required"`
 }
 type ListTemplatesRequest struct {
-	TenantID string `json:"tenant_id" binding:"required"`
-	Keyword  string `json:"keyword"`
-	Channel  string `json:"channel"`
-	Status   string `json:"status"`
-	Page     int    `json:"page"`
-	PageSize int    `json:"page_size"`
+	TenantID      string `json:"tenant_id" binding:"required"`
+	ApplicationID string `json:"application_id" binding:"required"`
+	Keyword       string `json:"keyword"`
+	Channel       string `json:"channel"`
+	Status        string `json:"status"`
+	Page          int    `json:"page"`
+	PageSize      int    `json:"page_size"`
 }
 type GetDeliveryRequest struct {
-	ID       string `json:"id" binding:"required"`
-	TenantID string `json:"tenant_id" binding:"required"`
+	ID            string `json:"id" binding:"required"`
+	TenantID      string `json:"tenant_id" binding:"required"`
+	ApplicationID string `json:"application_id" binding:"required"`
 }
 type ListDeliveriesRequest struct {
-	TenantID string `json:"tenant_id" binding:"required"`
-	Status   string `json:"status"`
-	Page     int    `json:"page"`
-	PageSize int    `json:"page_size"`
+	TenantID      string `json:"tenant_id" binding:"required"`
+	ApplicationID string `json:"application_id" binding:"required"`
+	Status        string `json:"status"`
+	Page          int    `json:"page"`
+	PageSize      int    `json:"page_size"`
 }
 type ProviderReceiptRequest struct {
 	TenantID          string `json:"tenant_id" binding:"required"`
+	ApplicationID     string `json:"application_id" binding:"required"`
 	Provider          string `json:"provider" binding:"required"`
 	ProviderMessageID string `json:"provider_message_id" binding:"required"`
 	Status            string `json:"status" binding:"required"`
@@ -76,24 +82,26 @@ type TemplatePageResponseBody struct {
 }
 
 type TemplateResponseBody struct {
-	ID        string    `json:"id"`
-	TenantID  string    `json:"tenant_id"`
-	Code      string    `json:"code"`
-	Channel   string    `json:"channel"`
-	Locale    string    `json:"locale"`
-	Subject   string    `json:"subject"`
-	Content   string    `json:"content"`
-	Status    string    `json:"status"`
-	Version   int64     `json:"version"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
-	CreatedBy string    `json:"created_by"`
-	UpdatedBy string    `json:"updated_by"`
+	ID            string    `json:"id"`
+	TenantID      string    `json:"tenant_id"`
+	ApplicationID string    `json:"application_id"`
+	Code          string    `json:"code"`
+	Channel       string    `json:"channel"`
+	Locale        string    `json:"locale"`
+	Subject       string    `json:"subject"`
+	Content       string    `json:"content"`
+	Status        string    `json:"status"`
+	Version       int64     `json:"version"`
+	CreatedAt     time.Time `json:"created_at"`
+	UpdatedAt     time.Time `json:"updated_at"`
+	CreatedBy     string    `json:"created_by"`
+	UpdatedBy     string    `json:"updated_by"`
 }
 
 type DeliveryResponseBody struct {
 	ID                string    `json:"id"`
 	TenantID          string    `json:"tenant_id"`
+	ApplicationID     string    `json:"application_id"`
 	TemplateCode      string    `json:"template_code"`
 	Channel           string    `json:"channel"`
 	Locale            string    `json:"locale"`
@@ -192,7 +200,7 @@ func (h *Handler) PutNotificationTemplate(c *gin.Context) {
 		Fail(c, h.logger, apperror.Invalid("invalid json request", err))
 		return
 	}
-	v, err := h.notifications.PutTemplate(c.Request.Context(), notificationdomain.Template{TenantID: r.TenantID, Code: r.Code, Channel: r.Channel, Locale: r.Locale, Subject: r.Subject, Content: r.Content, Status: r.Status}, r.ExpectedVersion)
+	v, err := h.notifications.PutTemplate(c.Request.Context(), notificationdomain.Template{TenantID: r.TenantID, ApplicationID: r.ApplicationID, Code: r.Code, Channel: r.Channel, Locale: r.Locale, Subject: r.Subject, Content: r.Content, Status: r.Status}, r.ExpectedVersion)
 	if err != nil {
 		Fail(c, h.logger, err)
 		return
@@ -213,7 +221,7 @@ func (h *Handler) ListNotificationTemplates(c *gin.Context) {
 		Fail(c, h.logger, apperror.Invalid("invalid json request", err))
 		return
 	}
-	page, err := h.notifications.ListTemplates(c.Request.Context(), request.TenantID, request.Keyword, request.Channel, request.Status, request.Page, request.PageSize)
+	page, err := h.notifications.ListTemplates(c.Request.Context(), request.TenantID, request.ApplicationID, request.Keyword, request.Channel, request.Status, request.Page, request.PageSize)
 	if err != nil {
 		Fail(c, h.logger, err)
 		return
@@ -238,7 +246,7 @@ func (h *Handler) SendNotification(c *gin.Context) {
 		Fail(c, h.logger, apperror.Invalid("invalid json request", err))
 		return
 	}
-	v, err := h.notifications.Send(c.Request.Context(), r.TenantID, r.TemplateCode, r.Channel, r.Locale, r.Recipient, r.IdempotencyKey, r.Variables)
+	v, err := h.notifications.Send(c.Request.Context(), r.TenantID, r.ApplicationID, r.TemplateCode, r.Channel, r.Locale, r.Recipient, r.IdempotencyKey, r.Variables)
 	if err != nil {
 		Fail(c, h.logger, err)
 		return
@@ -259,7 +267,7 @@ func (h *Handler) RecordProviderReceipt(c *gin.Context) {
 		Fail(c, h.logger, apperror.Invalid("invalid json request", err))
 		return
 	}
-	v, err := h.notifications.RecordReceipt(c.Request.Context(), r.TenantID, r.Provider, r.ProviderMessageID, r.Status, r.FailureReason)
+	v, err := h.notifications.RecordReceipt(c.Request.Context(), r.TenantID, r.ApplicationID, r.Provider, r.ProviderMessageID, r.Status, r.FailureReason)
 	if err != nil {
 		Fail(c, h.logger, err)
 		return
@@ -280,7 +288,7 @@ func (h *Handler) GetNotificationDelivery(c *gin.Context) {
 		Fail(c, h.logger, apperror.Invalid("invalid json request", err))
 		return
 	}
-	v, err := h.notifications.GetDelivery(c.Request.Context(), r.ID, r.TenantID)
+	v, err := h.notifications.GetDelivery(c.Request.Context(), r.ID, r.TenantID, r.ApplicationID)
 	if err != nil {
 		Fail(c, h.logger, err)
 		return
@@ -301,7 +309,7 @@ func (h *Handler) ListNotificationDeliveries(c *gin.Context) {
 		Fail(c, h.logger, apperror.Invalid("invalid json request", err))
 		return
 	}
-	v, err := h.notifications.ListDeliveries(c.Request.Context(), r.TenantID, r.Status, r.Page, r.PageSize)
+	v, err := h.notifications.ListDeliveries(c.Request.Context(), r.TenantID, r.ApplicationID, r.Status, r.Page, r.PageSize)
 	if err != nil {
 		Fail(c, h.logger, err)
 		return
@@ -319,7 +327,7 @@ func deliveryResponse(value notificationdomain.Delivery) DeliveryResponseBody {
 		_ = json.Unmarshal(value.Variables, &variables)
 	}
 	return DeliveryResponseBody{
-		ID: value.ID, TenantID: value.TenantID, TemplateCode: value.TemplateCode, Channel: value.Channel,
+		ID: value.ID, TenantID: value.TenantID, ApplicationID: value.ApplicationID, TemplateCode: value.TemplateCode, Channel: value.Channel,
 		Locale: value.Locale, Recipient: value.Recipient, Variables: variables, IdempotencyKey: value.IdempotencyKey,
 		Status: value.Status, Provider: value.Provider, ProviderMessageID: value.ProviderMessageID,
 		FailureReason: value.FailureReason, Attempts: value.Attempts, NextAttemptAt: value.NextAttemptAt,
@@ -330,7 +338,7 @@ func deliveryResponse(value notificationdomain.Delivery) DeliveryResponseBody {
 
 func templateResponse(value notificationdomain.Template) TemplateResponseBody {
 	return TemplateResponseBody{
-		ID: value.ID, TenantID: value.TenantID, Code: value.Code, Channel: value.Channel, Locale: value.Locale,
+		ID: value.ID, TenantID: value.TenantID, ApplicationID: value.ApplicationID, Code: value.Code, Channel: value.Channel, Locale: value.Locale,
 		Subject: value.Subject, Content: value.Content, Status: value.Status, Version: value.Version,
 		CreatedAt: value.CreatedAt, UpdatedAt: value.UpdatedAt, CreatedBy: value.CreatedBy, UpdatedBy: value.UpdatedBy,
 	}

@@ -3,10 +3,49 @@ package migration
 import (
 	"database/sql"
 	"net/url"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/DATA-DOG/go-sqlmock"
 )
+
+func TestMigrationVersionsAreUniquePerDialect(t *testing.T) {
+	t.Parallel()
+	for _, dialect := range []string{"postgres", "kingbase", "mysql"} {
+		dialect := dialect
+		t.Run(dialect, func(t *testing.T) {
+			entries, err := os.ReadDir(filepath.Join("..", "..", "migrations", dialect))
+			if err != nil {
+				t.Fatal(err)
+			}
+			seen := make(map[string]map[string]string)
+			for _, entry := range entries {
+				parts := strings.Split(entry.Name(), ".")
+				if entry.IsDir() || len(parts) != 3 || (parts[1] != "up" && parts[1] != "down") {
+					continue
+				}
+				version, _, ok := strings.Cut(parts[0], "_")
+				if !ok {
+					t.Fatalf("migration %q has no version prefix", entry.Name())
+				}
+				if seen[version] == nil {
+					seen[version] = make(map[string]string)
+				}
+				if previous := seen[version][parts[1]]; previous != "" {
+					t.Fatalf("migration version %s has duplicate %s files: %s and %s", version, parts[1], previous, entry.Name())
+				}
+				seen[version][parts[1]] = entry.Name()
+			}
+			for version, directions := range seen {
+				if directions["up"] == "" || directions["down"] == "" {
+					t.Fatalf("migration version %s must have one up and one down file: %#v", version, directions)
+				}
+			}
+		})
+	}
+}
 
 func TestWithMigrationTable(t *testing.T) {
 	t.Parallel()

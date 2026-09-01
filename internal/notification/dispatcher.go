@@ -120,7 +120,7 @@ func (d *Dispatcher) RunOnce(ctx context.Context) (int, error) {
 	return len(due), nil
 }
 func (d *Dispatcher) deliver(ctx context.Context, delivery Delivery) {
-	tpl, err := d.repository.GetTemplate(ctx, delivery.TenantID, delivery.TemplateCode, delivery.Channel, delivery.Locale)
+	tpl, err := d.repository.GetTemplate(ctx, delivery.TenantID, delivery.ApplicationID, delivery.TemplateCode, delivery.Channel, delivery.Locale)
 	var result SendResult
 	if err == nil {
 		var variables map[string]string

@@ -44,6 +44,8 @@ definitions:
     type: object
   httptransport.DeliveryResponseBody:
     properties:
+      application_id:
+        type: string
       attempts:
         type: integer
       channel:
@@ -84,16 +86,21 @@ definitions:
     type: object
   httptransport.GetDeliveryRequest:
     properties:
+      application_id:
+        type: string
       id:
         type: string
       tenant_id:
         type: string
     required:
+    - application_id
     - id
     - tenant_id
     type: object
   httptransport.ListDeliveriesRequest:
     properties:
+      application_id:
+        type: string
       page:
         type: integer
       page_size:
@@ -103,10 +110,13 @@ definitions:
       tenant_id:
         type: string
     required:
+    - application_id
     - tenant_id
     type: object
   httptransport.ListTemplatesRequest:
     properties:
+      application_id:
+        type: string
       channel:
         type: string
       keyword:
@@ -120,6 +130,7 @@ definitions:
       tenant_id:
         type: string
     required:
+    - application_id
     - tenant_id
     type: object
   httptransport.MeResponseBody:
@@ -129,6 +140,8 @@ definitions:
     type: object
   httptransport.ProviderReceiptRequest:
     properties:
+      application_id:
+        type: string
       failure_reason:
         type: string
       provider:
@@ -140,6 +153,7 @@ definitions:
       tenant_id:
         type: string
     required:
+    - application_id
     - provider
     - provider_message_id
     - status
@@ -147,6 +161,8 @@ definitions:
     type: object
   httptransport.PutTemplateRequest:
     properties:
+      application_id:
+        type: string
       channel:
         type: string
       code:
@@ -164,6 +180,7 @@ definitions:
       tenant_id:
         type: string
     required:
+    - application_id
     - channel
     - code
     - content
@@ -182,6 +199,8 @@ definitions:
     type: object
   httptransport.SendNotificationRequest:
     properties:
+      application_id:
+        type: string
       channel:
         type: string
       idempotency_key:
@@ -199,6 +218,7 @@ definitions:
           type: string
         type: object
     required:
+    - application_id
     - channel
     - idempotency_key
     - locale
@@ -221,6 +241,8 @@ definitions:
     type: object
   httptransport.TemplateResponseBody:
     properties:
+      application_id:
+        type: string
       channel:
         type: string
       code:

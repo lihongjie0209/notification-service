@@ -502,6 +502,9 @@ const docTemplate = `{
         "httptransport.DeliveryResponseBody": {
             "type": "object",
             "properties": {
+                "application_id": {
+                    "type": "string"
+                },
                 "attempts": {
                     "type": "integer"
                 },
@@ -562,10 +565,14 @@ const docTemplate = `{
         "httptransport.GetDeliveryRequest": {
             "type": "object",
             "required": [
+                "application_id",
                 "id",
                 "tenant_id"
             ],
             "properties": {
+                "application_id": {
+                    "type": "string"
+                },
                 "id": {
                     "type": "string"
                 },
@@ -577,9 +584,13 @@ const docTemplate = `{
         "httptransport.ListDeliveriesRequest": {
             "type": "object",
             "required": [
+                "application_id",
                 "tenant_id"
             ],
             "properties": {
+                "application_id": {
+                    "type": "string"
+                },
                 "page": {
                     "type": "integer"
                 },
@@ -597,9 +608,13 @@ const docTemplate = `{
         "httptransport.ListTemplatesRequest": {
             "type": "object",
             "required": [
+                "application_id",
                 "tenant_id"
             ],
             "properties": {
+                "application_id": {
+                    "type": "string"
+                },
                 "channel": {
                     "type": "string"
                 },
@@ -631,12 +646,16 @@ const docTemplate = `{
         "httptransport.ProviderReceiptRequest": {
             "type": "object",
             "required": [
+                "application_id",
                 "provider",
                 "provider_message_id",
                 "status",
                 "tenant_id"
             ],
             "properties": {
+                "application_id": {
+                    "type": "string"
+                },
                 "failure_reason": {
                     "type": "string"
                 },
@@ -657,6 +676,7 @@ const docTemplate = `{
         "httptransport.PutTemplateRequest": {
             "type": "object",
             "required": [
+                "application_id",
                 "channel",
                 "code",
                 "content",
@@ -664,6 +684,9 @@ const docTemplate = `{
                 "tenant_id"
             ],
             "properties": {
+                "application_id": {
+                    "type": "string"
+                },
                 "channel": {
                     "type": "string"
                 },
@@ -708,6 +731,7 @@ const docTemplate = `{
         "httptransport.SendNotificationRequest": {
             "type": "object",
             "required": [
+                "application_id",
                 "channel",
                 "idempotency_key",
                 "locale",
@@ -716,6 +740,9 @@ const docTemplate = `{
                 "tenant_id"
             ],
             "properties": {
+                "application_id": {
+                    "type": "string"
+                },
                 "channel": {
                     "type": "string"
                 },
@@ -765,6 +792,9 @@ const docTemplate = `{
         "httptransport.TemplateResponseBody": {
             "type": "object",
             "properties": {
+                "application_id": {
+                    "type": "string"
+                },
                 "channel": {
                     "type": "string"
                 },
