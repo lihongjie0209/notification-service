@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -15,7 +16,85 @@ import (
 	platformprincipal "github.com/lihongjie0209/microservice-platform-go/principal"
 	"github.com/lihongjie0209/notification-service/internal/auth"
 	"github.com/lihongjie0209/notification-service/internal/config"
+	"github.com/lihongjie0209/notification-service/internal/idempotency"
 )
+
+type fakeIdempotencyManager struct {
+	decision  idempotency.Decision
+	beginKey  string
+	completed *Response
+}
+
+func (*fakeIdempotencyManager) Enabled() bool { return true }
+func (m *fakeIdempotencyManager) Begin(_ context.Context, key, _ string) (idempotency.Decision, error) {
+	m.beginKey = key
+	return m.decision, nil
+}
+func (m *fakeIdempotencyManager) Complete(_ context.Context, _, _ string, response any) error {
+	value, ok := response.(Response)
+	if ok {
+		m.completed = &value
+	}
+	return nil
+}
+func (*fakeIdempotencyManager) Fail(context.Context, string, string, idempotency.Failure) error {
+	return nil
+}
+
+func TestIdempotencyExecutionCompletesAndReplaysNotificationSend(t *testing.T) {
+	t.Parallel()
+	manager := &fakeIdempotencyManager{decision: idempotency.Decision{State: idempotency.StateAcquired, Owner: "owner-1"}}
+	calls := 0
+	router := gin.New()
+	router.Use(RequestID(), func(c *gin.Context) {
+		c.Set("subject", "user-1")
+		c.Request = c.Request.WithContext(idempotency.WithContext(c.Request.Context(), "operation-1"))
+		c.Next()
+	}, IdempotencyExecution(manager, []string{"/api/v1/notifications/send"}, slog.New(slog.NewTextHandler(io.Discard, nil))))
+	router.POST("/api/v1/notifications/send", func(c *gin.Context) { calls++; OK(c, gin.H{"delivery_id": "delivery-1"}) })
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, httptest.NewRequest(http.MethodPost, "/api/v1/notifications/send", strings.NewReader(`{"recipient":"a@example.test"}`)))
+	if calls != 1 || manager.beginKey != "operation-1" || manager.completed == nil || manager.completed.RequestID != "" {
+		t.Fatalf("calls=%d key=%q completed=%+v", calls, manager.beginKey, manager.completed)
+	}
+	stored, err := json.Marshal(*manager.completed)
+	if err != nil {
+		t.Fatal(err)
+	}
+	manager.decision = idempotency.Decision{State: idempotency.StateCompleted, Response: stored}
+	replay := httptest.NewRequest(http.MethodPost, "/api/v1/notifications/send", strings.NewReader(`{"recipient":"a@example.test"}`))
+	replay.Header.Set("X-Request-ID", "current-request")
+	replayRecorder := httptest.NewRecorder()
+	router.ServeHTTP(replayRecorder, replay)
+	var response Response
+	if err := json.Unmarshal(replayRecorder.Body.Bytes(), &response); err != nil {
+		t.Fatal(err)
+	}
+	if calls != 1 || response.RequestID != "current-request" {
+		t.Fatalf("calls=%d response=%+v", calls, response)
+	}
+}
+
+func TestIdempotencyExecutionBypassesNotificationQueries(t *testing.T) {
+	t.Parallel()
+	for _, route := range []string{"/api/v1/notifications/templates/list", "/api/v1/notifications/deliveries/get", "/api/v1/notifications/deliveries/list"} {
+		t.Run(route, func(t *testing.T) {
+			manager := &fakeIdempotencyManager{decision: idempotency.Decision{State: idempotency.StateConflict}}
+			calls := 0
+			router := gin.New()
+			router.Use(func(c *gin.Context) {
+				c.Request = c.Request.WithContext(idempotency.WithContext(c.Request.Context(), "operation-1"))
+				c.Next()
+			}, IdempotencyExecution(manager, []string{"/api/v1/notifications/send"}, slog.New(slog.NewTextHandler(io.Discard, nil))))
+			router.POST(route, func(c *gin.Context) { calls++; OK(c, nil) })
+			recorder := httptest.NewRecorder()
+			router.ServeHTTP(recorder, httptest.NewRequest(http.MethodPost, route, nil))
+			if calls != 1 || recorder.Code != http.StatusOK || manager.beginKey != "" {
+				t.Fatalf("calls=%d status=%d key=%q", calls, recorder.Code, manager.beginKey)
+			}
+		})
+	}
+}
 
 type authorizationStub struct{ err error }
 

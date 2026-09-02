@@ -20,6 +20,25 @@ func TestConfig_AuthorizationRequiresConfiguredUpstream(t *testing.T) {
 	}
 }
 
+func TestLoad_IdempotencyRouteEnvironmentOverrides(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.yaml")
+	if err := os.WriteFile(path, []byte("idempotency:\n  http_paths: [/api/v1/old]\n  grpc_methods: [/old.Service/Create]\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("APP_IDEMPOTENCY_HTTP_PATHS", "[/api/v1/notifications/send, /api/v1/notifications/providers/receipt]")
+	t.Setenv("APP_IDEMPOTENCY_GRPC_METHODS", "[/platform.notification.v1.NotificationService/Send]")
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.Join(cfg.Idempotency.HTTPPaths, ","); got != "/api/v1/notifications/send,/api/v1/notifications/providers/receipt" {
+		t.Fatalf("HTTPPaths = %q", got)
+	}
+	if got := strings.Join(cfg.Idempotency.GRPCMethods, ","); got != "/platform.notification.v1.NotificationService/Send" {
+		t.Fatalf("GRPCMethods = %q", got)
+	}
+}
+
 func TestConfig_ProductionRequiresAuthorization(t *testing.T) {
 	cfg, err := Load("../../config/config.yaml")
 	if err != nil {

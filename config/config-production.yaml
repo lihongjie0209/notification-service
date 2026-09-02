@@ -32,6 +32,8 @@ rate_limit:
   enabled: true
 idempotency:
   enabled: true
+  http_paths: [/api/v1/notifications/templates/put, /api/v1/notifications/send, /api/v1/notifications/providers/receipt]
+  grpc_methods: [/platform.notification.v1.NotificationService/PutTemplate, /platform.notification.v1.NotificationService/Send, /platform.notification.v1.NotificationService/RecordProviderReceipt]
 observability:
   metrics_enabled: true
   tracing_enabled: false
