@@ -79,8 +79,10 @@ func notificationGRPCRequirement(enabled bool) platformauthz.GRPCResolver {
 		}
 		requirements := map[string]platformauthz.Requirement{
 			notificationv1.NotificationService_PutProvider_FullMethodName:           {Resource: "notification.provider", Action: "update", Scope: platformauthz.ScopePrincipal},
+			notificationv1.NotificationService_GetProvider_FullMethodName:           {Resource: "notification.provider", Action: "read", Scope: platformauthz.ScopePrincipal},
 			notificationv1.NotificationService_ListProviders_FullMethodName:         {Resource: "notification.provider", Action: "list", Scope: platformauthz.ScopePrincipal},
 			notificationv1.NotificationService_PutTemplate_FullMethodName:           {Resource: "notification.template", Action: "update", Scope: platformauthz.ScopePrincipal},
+			notificationv1.NotificationService_GetTemplate_FullMethodName:           {Resource: "notification.template", Action: "read", Scope: platformauthz.ScopePrincipal},
 			notificationv1.NotificationService_ListTemplates_FullMethodName:         {Resource: "notification.template", Action: "list", Scope: platformauthz.ScopePrincipal},
 			notificationv1.NotificationService_Send_FullMethodName:                  {Resource: "notification.delivery", Action: "send", Scope: platformauthz.ScopePrincipal},
 			notificationv1.NotificationService_RecordProviderReceipt_FullMethodName: {Resource: "notification.receipt", Action: "record", Scope: platformauthz.ScopePlatform},
@@ -109,6 +111,14 @@ func (s *notificationServer) PutProvider(ctx context.Context, request *notificat
 	return &notificationv1.PutProviderResponse{Provider: toProtoProvider(result)}, nil
 }
 
+func (s *notificationServer) GetProvider(ctx context.Context, request *notificationv1.GetProviderRequest) (*notificationv1.GetProviderResponse, error) {
+	result, err := s.service.GetProvider(ctx, request.GetTenantId(), request.GetApplicationId(), request.GetCode())
+	if err != nil {
+		return nil, grpcError(err)
+	}
+	return &notificationv1.GetProviderResponse{Provider: toProtoProvider(result)}, nil
+}
+
 func (s *notificationServer) ListProviders(ctx context.Context, request *notificationv1.ListProvidersRequest) (*notificationv1.ListProvidersResponse, error) {
 	page, pageSize := 0, 0
 	if request.GetPage() != nil {
@@ -135,6 +145,14 @@ func (s *notificationServer) PutTemplate(ctx context.Context, r *notificationv1.
 		return nil, grpcError(err)
 	}
 	return &notificationv1.PutTemplateResponse{Template: toProtoTemplate(result)}, nil
+}
+
+func (s *notificationServer) GetTemplate(ctx context.Context, request *notificationv1.GetTemplateRequest) (*notificationv1.GetTemplateResponse, error) {
+	result, err := s.service.GetTemplate(ctx, request.GetTenantId(), request.GetApplicationId(), request.GetCode(), request.GetChannel(), request.GetLocale())
+	if err != nil {
+		return nil, grpcError(err)
+	}
+	return &notificationv1.GetTemplateResponse{Template: toProtoTemplate(result)}, nil
 }
 func (s *notificationServer) ListTemplates(ctx context.Context, r *notificationv1.ListTemplatesRequest) (*notificationv1.ListTemplatesResponse, error) {
 	page, pageSize := 0, 0

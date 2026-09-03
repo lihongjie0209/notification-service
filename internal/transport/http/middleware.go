@@ -352,8 +352,10 @@ func Authorization(enabled bool, authorizer platformauthz.Authorizer, logger *sl
 func notificationHTTPRequirement(route string) (platformauthz.Requirement, bool) {
 	requirements := map[string]platformauthz.Requirement{
 		"/api/v1/notifications/templates/put":     {Resource: "notification.template", Action: "update", Scope: platformauthz.ScopePrincipal},
+		"/api/v1/notifications/templates/get":     {Resource: "notification.template", Action: "read", Scope: platformauthz.ScopePrincipal},
 		"/api/v1/notifications/templates/list":    {Resource: "notification.template", Action: "list", Scope: platformauthz.ScopePrincipal},
 		"/api/v1/notifications/providers/put":     {Resource: "notification.provider", Action: "update", Scope: platformauthz.ScopePrincipal},
+		"/api/v1/notifications/providers/get":     {Resource: "notification.provider", Action: "read", Scope: platformauthz.ScopePrincipal},
 		"/api/v1/notifications/providers/list":    {Resource: "notification.provider", Action: "list", Scope: platformauthz.ScopePrincipal},
 		"/api/v1/notifications/send":              {Resource: "notification.delivery", Action: "send", Scope: platformauthz.ScopePrincipal},
 		"/api/v1/notifications/providers/receipt": {Resource: "notification.receipt", Action: "record", Scope: platformauthz.ScopePlatform},

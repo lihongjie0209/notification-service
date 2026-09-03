@@ -103,6 +103,33 @@ func (s *Service) PutProvider(ctx context.Context, value Provider, expected int6
 	return current, translate(err)
 }
 
+func (s *Service) GetProvider(ctx context.Context, tenant, application, code string) (Provider, error) {
+	tenant = strings.TrimSpace(tenant)
+	application = strings.TrimSpace(application)
+	code = strings.ToLower(strings.TrimSpace(code))
+	if tenant == "" || application == "" || code == "" {
+		return Provider{}, apperror.Invalid("tenant_id, application_id and code are required", nil)
+	}
+	caller, ok := platformprincipal.FromContext(ctx)
+	if !ok {
+		return Provider{}, apperror.Unauthorized("authenticated actor is required")
+	}
+	if err := enforceTenant(caller, tenant); err != nil {
+		return Provider{}, err
+	}
+	if err := s.verifyApplication(ctx, tenant, application); err != nil {
+		return Provider{}, err
+	}
+	value, err := s.repository.GetProvider(ctx, tenant, application, code)
+	if err != nil {
+		return Provider{}, translate(err)
+	}
+	if value.TenantID != tenant || value.ApplicationID != application {
+		return Provider{}, apperror.Forbidden("notification provider access denied")
+	}
+	return value, nil
+}
+
 func validProviderPath(value string) bool {
 	parsed, err := url.Parse(value)
 	return err == nil && strings.HasPrefix(parsed.Path, "/") && !strings.HasPrefix(parsed.Path, "//") && parsed.Scheme == "" && parsed.Host == "" && parsed.User == nil && parsed.Fragment == ""
@@ -191,6 +218,35 @@ func (s *Service) PutTemplate(ctx context.Context, v Template, expected int64) (
 	err = s.transactor.Within(ctx, nil, func(tx *sqlx.Tx) error { return s.repository.UpdateTemplate(ctx, tx, current, expected) })
 	current.Version = expected + 1
 	return current, translate(err)
+}
+
+func (s *Service) GetTemplate(ctx context.Context, tenant, application, code, channel, locale string) (Template, error) {
+	tenant = strings.TrimSpace(tenant)
+	application = strings.TrimSpace(application)
+	code = strings.ToLower(strings.TrimSpace(code))
+	channel = strings.ToLower(strings.TrimSpace(channel))
+	locale = strings.ToLower(strings.TrimSpace(locale))
+	if tenant == "" || application == "" || code == "" || !validChannel(channel) || locale == "" {
+		return Template{}, apperror.Invalid("invalid notification template identity", nil)
+	}
+	caller, ok := platformprincipal.FromContext(ctx)
+	if !ok {
+		return Template{}, apperror.Unauthorized("authenticated actor is required")
+	}
+	if err := enforceTenant(caller, tenant); err != nil {
+		return Template{}, err
+	}
+	if err := s.verifyApplication(ctx, tenant, application); err != nil {
+		return Template{}, err
+	}
+	value, err := s.repository.GetTemplate(ctx, tenant, application, code, channel, locale)
+	if err != nil {
+		return Template{}, translate(err)
+	}
+	if value.TenantID != tenant || value.ApplicationID != application {
+		return Template{}, apperror.Forbidden("notification template access denied")
+	}
+	return value, nil
 }
 func (s *Service) Send(ctx context.Context, tenant, application, code, channel, locale, recipient, key string, variables map[string]string) (Delivery, error) {
 	tenant = strings.TrimSpace(tenant)

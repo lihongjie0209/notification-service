@@ -17,7 +17,7 @@ import (
 func TestNotificationGRPCRequirementCoversMethodsAndScopes(t *testing.T) {
 	t.Parallel()
 	resolve := notificationGRPCRequirement(true)
-	methods := []string{notificationv1.NotificationService_PutProvider_FullMethodName, notificationv1.NotificationService_ListProviders_FullMethodName, notificationv1.NotificationService_PutTemplate_FullMethodName, notificationv1.NotificationService_ListTemplates_FullMethodName, notificationv1.NotificationService_Send_FullMethodName, notificationv1.NotificationService_RecordProviderReceipt_FullMethodName, notificationv1.NotificationService_GetDelivery_FullMethodName, notificationv1.NotificationService_ListDeliveries_FullMethodName}
+	methods := []string{notificationv1.NotificationService_PutProvider_FullMethodName, notificationv1.NotificationService_GetProvider_FullMethodName, notificationv1.NotificationService_ListProviders_FullMethodName, notificationv1.NotificationService_PutTemplate_FullMethodName, notificationv1.NotificationService_GetTemplate_FullMethodName, notificationv1.NotificationService_ListTemplates_FullMethodName, notificationv1.NotificationService_Send_FullMethodName, notificationv1.NotificationService_RecordProviderReceipt_FullMethodName, notificationv1.NotificationService_GetDelivery_FullMethodName, notificationv1.NotificationService_ListDeliveries_FullMethodName}
 	for _, method := range methods {
 		requirement, ok := resolve(method)
 		if !ok || requirement.Resource == "" || requirement.Action == "" {

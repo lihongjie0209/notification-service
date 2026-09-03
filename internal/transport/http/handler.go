@@ -45,6 +45,11 @@ type PutProviderRequest struct {
 	Status          string `json:"status"`
 	ExpectedVersion int64  `json:"expected_version"`
 }
+type GetProviderRequest struct {
+	TenantID      string `json:"tenant_id" binding:"required"`
+	ApplicationID string `json:"application_id" binding:"required"`
+	Code          string `json:"code" binding:"required"`
+}
 type ListProvidersRequest struct {
 	TenantID      string `json:"tenant_id" binding:"required"`
 	ApplicationID string `json:"application_id" binding:"required"`
@@ -72,6 +77,13 @@ type ListTemplatesRequest struct {
 	Status        string `json:"status"`
 	Page          int    `json:"page"`
 	PageSize      int    `json:"page_size"`
+}
+type GetTemplateRequest struct {
+	TenantID      string `json:"tenant_id" binding:"required"`
+	ApplicationID string `json:"application_id" binding:"required"`
+	Code          string `json:"code" binding:"required"`
+	Channel       string `json:"channel" binding:"required"`
+	Locale        string `json:"locale" binding:"required"`
 }
 type GetDeliveryRequest struct {
 	ID            string `json:"id" binding:"required"`
@@ -245,6 +257,29 @@ func (h *Handler) PutNotificationProvider(c *gin.Context) {
 	OK(c, providerResponse(value))
 }
 
+// GetNotificationProvider godoc
+// @Summary Get a notification provider route
+// @Tags notifications
+// @Accept json
+// @Produce json
+// @Security Bearer
+// @Param request body GetProviderRequest true "Provider identity"
+// @Success 200 {object} Response{body=ProviderResponseBody}
+// @Router /api/v1/notifications/providers/get [post]
+func (h *Handler) GetNotificationProvider(c *gin.Context) {
+	var request GetProviderRequest
+	if err := c.ShouldBindJSON(&request); err != nil {
+		Fail(c, h.logger, apperror.Invalid("invalid request body", err))
+		return
+	}
+	value, err := h.notifications.GetProvider(c.Request.Context(), request.TenantID, request.ApplicationID, request.Code)
+	if err != nil {
+		Fail(c, h.logger, err)
+		return
+	}
+	OK(c, providerResponse(value))
+}
+
 // ListNotificationProviders godoc
 // @Summary List notification provider routes
 // @Tags notifications
@@ -302,6 +337,29 @@ func (h *Handler) PutNotificationTemplate(c *gin.Context) {
 		return
 	}
 	OK(c, templateResponse(v))
+}
+
+// GetNotificationTemplate godoc
+// @Summary Get a notification template
+// @Tags notification
+// @Accept json
+// @Produce json
+// @Security Bearer
+// @Param request body GetTemplateRequest true "Template identity"
+// @Success 200 {object} Response{body=TemplateResponseBody}
+// @Router /api/v1/notifications/templates/get [post]
+func (h *Handler) GetNotificationTemplate(c *gin.Context) {
+	var request GetTemplateRequest
+	if err := c.ShouldBindJSON(&request); err != nil {
+		Fail(c, h.logger, apperror.Invalid("invalid request body", err))
+		return
+	}
+	value, err := h.notifications.GetTemplate(c.Request.Context(), request.TenantID, request.ApplicationID, request.Code, request.Channel, request.Locale)
+	if err != nil {
+		Fail(c, h.logger, err)
+		return
+	}
+	OK(c, templateResponse(value))
 }
 
 // ListNotificationTemplates godoc

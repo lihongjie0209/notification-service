@@ -145,6 +145,56 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/v1/notifications/providers/get": {
+            "post": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "notifications"
+                ],
+                "summary": "Get a notification provider route",
+                "parameters": [
+                    {
+                        "description": "Provider identity",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/httptransport.GetProviderRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/httptransport.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "body": {
+                                            "$ref": "#/definitions/httptransport.ProviderResponseBody"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/notifications/providers/list": {
             "post": {
                 "security": [
@@ -324,6 +374,56 @@ const docTemplate = `{
                                     "properties": {
                                         "body": {
                                             "$ref": "#/definitions/httptransport.DeliveryResponseBody"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/notifications/templates/get": {
+            "post": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "notification"
+                ],
+                "summary": "Get a notification template",
+                "parameters": [
+                    {
+                        "description": "Template identity",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/httptransport.GetTemplateRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/httptransport.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "body": {
+                                            "$ref": "#/definitions/httptransport.TemplateResponseBody"
                                         }
                                     }
                                 }
@@ -674,6 +774,52 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "id": {
+                    "type": "string"
+                },
+                "tenant_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "httptransport.GetProviderRequest": {
+            "type": "object",
+            "required": [
+                "application_id",
+                "code",
+                "tenant_id"
+            ],
+            "properties": {
+                "application_id": {
+                    "type": "string"
+                },
+                "code": {
+                    "type": "string"
+                },
+                "tenant_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "httptransport.GetTemplateRequest": {
+            "type": "object",
+            "required": [
+                "application_id",
+                "channel",
+                "code",
+                "locale",
+                "tenant_id"
+            ],
+            "properties": {
+                "application_id": {
+                    "type": "string"
+                },
+                "channel": {
+                    "type": "string"
+                },
+                "code": {
+                    "type": "string"
+                },
+                "locale": {
                     "type": "string"
                 },
                 "tenant_id": {

@@ -97,6 +97,38 @@ definitions:
     - id
     - tenant_id
     type: object
+  httptransport.GetProviderRequest:
+    properties:
+      application_id:
+        type: string
+      code:
+        type: string
+      tenant_id:
+        type: string
+    required:
+    - application_id
+    - code
+    - tenant_id
+    type: object
+  httptransport.GetTemplateRequest:
+    properties:
+      application_id:
+        type: string
+      channel:
+        type: string
+      code:
+        type: string
+      locale:
+        type: string
+      tenant_id:
+        type: string
+    required:
+    - application_id
+    - channel
+    - code
+    - locale
+    - tenant_id
+    type: object
   httptransport.ListDeliveriesRequest:
     properties:
       application_id:
@@ -441,6 +473,34 @@ paths:
       summary: List notification deliveries
       tags:
       - notification
+  /api/v1/notifications/providers/get:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Provider identity
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/httptransport.GetProviderRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/httptransport.Response'
+            - properties:
+                body:
+                  $ref: '#/definitions/httptransport.ProviderResponseBody'
+              type: object
+      security:
+      - Bearer: []
+      summary: Get a notification provider route
+      tags:
+      - notifications
   /api/v1/notifications/providers/list:
     post:
       consumes:
@@ -543,6 +603,34 @@ paths:
       security:
       - Bearer: []
       summary: Queue a notification for asynchronous delivery
+      tags:
+      - notification
+  /api/v1/notifications/templates/get:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Template identity
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/httptransport.GetTemplateRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/httptransport.Response'
+            - properties:
+                body:
+                  $ref: '#/definitions/httptransport.TemplateResponseBody'
+              type: object
+      security:
+      - Bearer: []
+      summary: Get a notification template
       tags:
       - notification
   /api/v1/notifications/templates/list:

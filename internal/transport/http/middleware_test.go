@@ -77,7 +77,7 @@ func TestIdempotencyExecutionCompletesAndReplaysNotificationSend(t *testing.T) {
 
 func TestIdempotencyExecutionBypassesNotificationQueries(t *testing.T) {
 	t.Parallel()
-	for _, route := range []string{"/api/v1/notifications/templates/list", "/api/v1/notifications/deliveries/get", "/api/v1/notifications/deliveries/list"} {
+	for _, route := range []string{"/api/v1/notifications/templates/get", "/api/v1/notifications/templates/list", "/api/v1/notifications/providers/get", "/api/v1/notifications/deliveries/get", "/api/v1/notifications/deliveries/list"} {
 		t.Run(route, func(t *testing.T) {
 			manager := &fakeIdempotencyManager{decision: idempotency.Decision{State: idempotency.StateConflict}}
 			calls := 0
@@ -104,7 +104,7 @@ func (a authorizationStub) Authorize(context.Context, platformprincipal.Principa
 
 func TestNotificationHTTPRequirementCoversRoutesAndScopes(t *testing.T) {
 	t.Parallel()
-	routes := []string{"/api/v1/notifications/templates/put", "/api/v1/notifications/templates/list", "/api/v1/notifications/providers/put", "/api/v1/notifications/providers/list", "/api/v1/notifications/send", "/api/v1/notifications/providers/receipt", "/api/v1/notifications/deliveries/get", "/api/v1/notifications/deliveries/list"}
+	routes := []string{"/api/v1/notifications/templates/put", "/api/v1/notifications/templates/get", "/api/v1/notifications/templates/list", "/api/v1/notifications/providers/put", "/api/v1/notifications/providers/get", "/api/v1/notifications/providers/list", "/api/v1/notifications/send", "/api/v1/notifications/providers/receipt", "/api/v1/notifications/deliveries/get", "/api/v1/notifications/deliveries/list"}
 	for _, route := range routes {
 		requirement, ok := notificationHTTPRequirement(route)
 		if !ok || requirement.Resource == "" || requirement.Action == "" {

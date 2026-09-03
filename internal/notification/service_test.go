@@ -166,6 +166,70 @@ func TestPutTemplateRejectsInvalidSyntax(t *testing.T) {
 	}
 }
 
+func TestGetNotificationResourcesEnforcesScope(t *testing.T) {
+	t.Parallel()
+	ctx := platformprincipal.WithContext(t.Context(), platformprincipal.Principal{ID: "user-1", Type: platformprincipal.TypeUser, TenantID: "tenant-1"})
+
+	for _, test := range []struct {
+		name string
+		get  func(*Service) error
+	}{
+		{
+			name: "provider",
+			get: func(service *Service) error {
+				value, err := service.GetProvider(ctx, " tenant-1 ", " app-1 ", " EMAIL-PRIMARY ")
+				if err == nil && (value.ID != "provider-1" || value.Version != 3) {
+					t.Fatalf("provider = %+v", value)
+				}
+				return err
+			},
+		},
+		{
+			name: "template",
+			get: func(service *Service) error {
+				value, err := service.GetTemplate(ctx, " tenant-1 ", " app-1 ", " WELCOME ", " EMAIL ", " ZH-CN ")
+				if err == nil && (value.ID != "template-1" || value.Version != 4) {
+					t.Fatalf("template = %+v", value)
+				}
+				return err
+			},
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			repository := &fakeRepo{
+				provider: Provider{ID: "provider-1", TenantID: "tenant-1", ApplicationID: "app-1", Code: "email-primary", Version: 3},
+				template: Template{ID: "template-1", TenantID: "tenant-1", ApplicationID: "app-1", Code: "welcome", Channel: "email", Locale: "zh-cn", Version: 4},
+			}
+			if err := test.get(NewService(repository, &database.Transactor{}, nil, config.Config{})); err != nil {
+				t.Fatalf("Get() error = %v", err)
+			}
+		})
+	}
+}
+
+func TestGetNotificationResourcesRejectsPersistedApplicationMismatch(t *testing.T) {
+	t.Parallel()
+	repository := &fakeRepo{
+		provider: Provider{ID: "provider-1", TenantID: "tenant-1", ApplicationID: "other-app", Code: "email-primary"},
+		template: Template{ID: "template-1", TenantID: "tenant-1", ApplicationID: "other-app", Code: "welcome", Channel: "email", Locale: "zh-cn"},
+	}
+	service := NewService(repository, &database.Transactor{}, nil, config.Config{})
+	ctx := platformprincipal.WithContext(t.Context(), platformprincipal.Principal{ID: "user-1", Type: platformprincipal.TypeUser, TenantID: "tenant-1"})
+
+	for _, err := range []error{
+		func() error { _, err := service.GetProvider(ctx, "tenant-1", "app-1", "email-primary"); return err }(),
+		func() error {
+			_, err := service.GetTemplate(ctx, "tenant-1", "app-1", "welcome", "email", "zh-cn")
+			return err
+		}(),
+	} {
+		var appErr *apperror.Error
+		if !errors.As(err, &appErr) || appErr.Code != apperror.CodeForbidden {
+			t.Fatalf("Get() error = %v, want forbidden", err)
+		}
+	}
+}
+
 func TestPutProviderCreatesAndUpdatesWithOptimisticLock(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	if err != nil {

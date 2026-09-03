@@ -63,6 +63,10 @@ func TestRepositoryAndMigrations(t *testing.T) {
 			if err != nil || provider.Version != 1 {
 				t.Fatalf("put provider=%+v err=%v", provider, err)
 			}
+			storedProvider, err := service.GetProvider(actorCtx, "tenant-1", "app-1", "email-primary")
+			if err != nil || storedProvider.ID != provider.ID || storedProvider.Version != provider.Version {
+				t.Fatalf("get provider=%+v err=%v", storedProvider, err)
+			}
 			providers, err := service.ListProviders(actorCtx, "tenant-1", "app-1", "primary", "email", "active", 1, 20)
 			if err != nil || providers.Total != 1 || len(providers.Providers) != 1 || providers.Providers[0].ID != provider.ID {
 				t.Fatalf("list providers=%+v err=%v", providers, err)
@@ -70,6 +74,10 @@ func TestRepositoryAndMigrations(t *testing.T) {
 			template, err := service.PutTemplate(actorCtx, notificationdomain.Template{TenantID: "tenant-1", ApplicationID: "app-1", Code: "welcome", Channel: "email", Locale: "zh-cn", Subject: "Welcome", Content: "Hello {{.name}}"}, 0)
 			if err != nil || template.Version != 1 {
 				t.Fatalf("put template=%+v err=%v", template, err)
+			}
+			storedTemplate, err := service.GetTemplate(actorCtx, "tenant-1", "app-1", "welcome", "email", "zh-cn")
+			if err != nil || storedTemplate.ID != template.ID || storedTemplate.Version != template.Version {
+				t.Fatalf("get template=%+v err=%v", storedTemplate, err)
 			}
 			templates, err := service.ListTemplates(actorCtx, "tenant-1", "app-1", "wel", "email", "active", 1, 20)
 			if err != nil || templates.Total != 1 || len(templates.Templates) != 1 || templates.Templates[0].ID != template.ID {
