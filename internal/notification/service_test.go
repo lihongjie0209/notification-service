@@ -173,7 +173,7 @@ func TestPutProviderCreatesAndUpdatesWithOptimisticLock(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = db.Close() })
 	repository := &fakeRepo{}
-	service := NewService(repository, database.NewTransactor(sqlx.NewDb(db, "sqlmock")), nil, config.Config{Outbound: config.Outbound{HTTP: map[string]config.HTTPUpstream{"email-primary": {}, "email-secondary": {}}}})
+	service := NewService(repository, database.NewTransactor(sqlx.NewDb(db, "sqlmock")), nil, config.Config{Notification: config.Notification{ProviderUpstreams: []string{"email-primary", "email-secondary"}}, Outbound: config.Outbound{HTTP: map[string]config.HTTPUpstream{"email-primary": {}, "email-secondary": {}}}})
 	service.now = func() time.Time { return time.Date(2026, 9, 3, 8, 0, 0, 0, time.FixedZone("UTC+8", 8*3600)) }
 	ctx := platformprincipal.WithContext(t.Context(), platformprincipal.Principal{ID: "admin", Type: platformprincipal.TypeUser, TenantID: "tenant-1"})
 	mock.ExpectBegin()
@@ -200,7 +200,7 @@ func TestPutProviderCreatesAndUpdatesWithOptimisticLock(t *testing.T) {
 }
 
 func TestPutProviderRejectsUnsafeRouteAndStaleCreate(t *testing.T) {
-	service := NewService(&fakeRepo{}, &database.Transactor{}, nil, config.Config{Outbound: config.Outbound{HTTP: map[string]config.HTTPUpstream{"email": {}}}})
+	service := NewService(&fakeRepo{}, &database.Transactor{}, nil, config.Config{Notification: config.Notification{ProviderUpstreams: []string{"email"}}, Outbound: config.Outbound{HTTP: map[string]config.HTTPUpstream{"email": {}}}})
 	ctx := platformprincipal.WithContext(t.Context(), platformprincipal.Principal{ID: "admin", Type: platformprincipal.TypeUser, TenantID: "tenant-1"})
 	for _, value := range []Provider{
 		{TenantID: "tenant-1", ApplicationID: "app-1", Code: "primary", Channel: "email", Upstream: "email", Path: "https://evil.example/send"},
@@ -213,6 +213,10 @@ func TestPutProviderRejectsUnsafeRouteAndStaleCreate(t *testing.T) {
 	}
 	if _, err := service.PutProvider(ctx, Provider{TenantID: "tenant-1", ApplicationID: "app-1", Code: "primary", Channel: "email", Upstream: "email", Path: "/send"}, 2); err == nil {
 		t.Fatal("PutProvider accepted a nonzero version for create")
+	}
+	disallowed := NewService(&fakeRepo{}, &database.Transactor{}, nil, config.Config{Outbound: config.Outbound{HTTP: map[string]config.HTTPUpstream{"internal-api": {}}}})
+	if _, err := disallowed.PutProvider(ctx, Provider{TenantID: "tenant-1", ApplicationID: "app-1", Code: "primary", Channel: "email", Upstream: "internal-api", Path: "/send"}, 0); err == nil {
+		t.Fatal("PutProvider accepted an outbound client outside the provider allowlist")
 	}
 }
 

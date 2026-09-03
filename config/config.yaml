@@ -155,6 +155,8 @@ notification:
   template_limit: {rate: 300, burst: 50, period: 1m}
   recipient_limit: {rate: 10, burst: 3, period: 1h}
   providers: {}
+  # Dynamic provider routes may only reference these dedicated outbound.http names.
+  provider_upstreams: []
 
 # Named outbound clients. Put environment-specific endpoints and credentials in
 # config-{env}.yaml or APP_ variables.

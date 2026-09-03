@@ -57,7 +57,7 @@ func TestRepositoryAndMigrations(t *testing.T) {
 				t.Fatal(err)
 			}
 			t.Cleanup(func() { _ = db.Close() })
-			service := notificationdomain.NewService(notificationdomain.NewRepository(db), appdb.NewTransactor(db), nil, config.Config{Outbound: config.Outbound{HTTP: map[string]config.HTTPUpstream{"email-primary": {BaseURL: "https://provider.example.test"}}}})
+			service := notificationdomain.NewService(notificationdomain.NewRepository(db), appdb.NewTransactor(db), nil, config.Config{Notification: config.Notification{ProviderUpstreams: []string{"email-primary"}}, Outbound: config.Outbound{HTTP: map[string]config.HTTPUpstream{"email-primary": {BaseURL: "https://provider.example.test"}}}})
 			actorCtx := platformprincipal.WithContext(ctx, platformprincipal.Principal{ID: "admin-1", Type: platformprincipal.TypeUser, TenantID: "tenant-1"})
 			provider, err := service.PutProvider(actorCtx, notificationdomain.Provider{TenantID: "tenant-1", ApplicationID: "app-1", Code: "email-primary", Channel: "email", Upstream: "email-primary", Path: "/send", Priority: 10}, 0)
 			if err != nil || provider.Version != 1 {

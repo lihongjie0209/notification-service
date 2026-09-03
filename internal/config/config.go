@@ -215,17 +215,18 @@ type EventBus struct {
 	CleanupBatchSize   int           `mapstructure:"cleanup_batch_size"`
 }
 type Notification struct {
-	DispatchInterval time.Duration                   `mapstructure:"dispatch_interval"`
-	BatchSize        int                             `mapstructure:"batch_size"`
-	MaxAttempts      int32                           `mapstructure:"max_attempts"`
-	RetryBase        time.Duration                   `mapstructure:"retry_base"`
-	Retention        time.Duration                   `mapstructure:"retention"`
-	CleanupInterval  time.Duration                   `mapstructure:"cleanup_interval"`
-	CleanupBatchSize int                             `mapstructure:"cleanup_batch_size"`
-	TenantLimit      RateLimitRule                   `mapstructure:"tenant_limit"`
-	TemplateLimit    RateLimitRule                   `mapstructure:"template_limit"`
-	RecipientLimit   RateLimitRule                   `mapstructure:"recipient_limit"`
-	Providers        map[string]NotificationProvider `mapstructure:"providers"`
+	DispatchInterval  time.Duration                   `mapstructure:"dispatch_interval"`
+	BatchSize         int                             `mapstructure:"batch_size"`
+	MaxAttempts       int32                           `mapstructure:"max_attempts"`
+	RetryBase         time.Duration                   `mapstructure:"retry_base"`
+	Retention         time.Duration                   `mapstructure:"retention"`
+	CleanupInterval   time.Duration                   `mapstructure:"cleanup_interval"`
+	CleanupBatchSize  int                             `mapstructure:"cleanup_batch_size"`
+	TenantLimit       RateLimitRule                   `mapstructure:"tenant_limit"`
+	TemplateLimit     RateLimitRule                   `mapstructure:"template_limit"`
+	RecipientLimit    RateLimitRule                   `mapstructure:"recipient_limit"`
+	Providers         map[string]NotificationProvider `mapstructure:"providers"`
+	ProviderUpstreams []string                        `mapstructure:"provider_upstreams"`
 }
 type NotificationProvider struct {
 	Upstream string `mapstructure:"upstream"`

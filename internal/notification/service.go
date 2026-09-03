@@ -64,7 +64,7 @@ func (s *Service) PutProvider(ctx context.Context, value Provider, expected int6
 	if value.TenantID == "" || value.ApplicationID == "" || value.Code == "" || !validChannel(value.Channel) || value.Upstream == "" || !validProviderPath(value.Path) || value.Priority < 0 || (value.Status != "active" && value.Status != "disabled") {
 		return Provider{}, apperror.Invalid("invalid notification provider", nil)
 	}
-	if _, configured := s.outboundHTTP[value.Upstream]; !configured {
+	if _, configured := s.outboundHTTP[value.Upstream]; !configured || !providerUpstreamAllowed(s.config.ProviderUpstreams, value.Upstream) {
 		return Provider{}, apperror.Invalid("notification provider upstream is not configured", nil)
 	}
 	caller, ok := platformprincipal.FromContext(ctx)
@@ -106,6 +106,15 @@ func (s *Service) PutProvider(ctx context.Context, value Provider, expected int6
 func validProviderPath(value string) bool {
 	parsed, err := url.Parse(value)
 	return err == nil && strings.HasPrefix(parsed.Path, "/") && !strings.HasPrefix(parsed.Path, "//") && parsed.Scheme == "" && parsed.Host == "" && parsed.User == nil && parsed.Fragment == ""
+}
+
+func providerUpstreamAllowed(allowed []string, upstream string) bool {
+	for _, value := range allowed {
+		if strings.TrimSpace(value) == upstream {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *Service) ListProviders(ctx context.Context, tenant, application, keyword, channel, status string, page, pageSize int) (ProviderPage, error) {

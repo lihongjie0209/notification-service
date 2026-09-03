@@ -182,6 +182,9 @@ func (d *Dispatcher) sender(ctx context.Context, delivery Delivery) (Sender, err
 		return d.senders[delivery.Channel], nil
 	}
 	provider := providers[0]
+	if !providerUpstreamAllowed(d.cfg.ProviderUpstreams, provider.Upstream) {
+		return nil, fmt.Errorf("notification provider upstream %q is not allowed", provider.Upstream)
+	}
 	client, ok := d.outbound.HTTP(provider.Upstream)
 	if !ok {
 		return nil, fmt.Errorf("notification provider upstream %q is not configured", provider.Upstream)
