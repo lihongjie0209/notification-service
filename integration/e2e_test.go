@@ -113,6 +113,10 @@ func TestHTTPAndGRPCEndToEnd(t *testing.T) {
 		t.Fatalf("health = %v, %v", healthResponse, err)
 	}
 	pskCtx := metadata.AppendToOutgoingContext(ctx, "authorization", "PSK "+secret)
+	providers, err := notificationv1.NewNotificationServiceClient(connection).ListProviders(pskCtx, &notificationv1.ListProvidersRequest{TenantId: "tenant-1", ApplicationId: "app-1"})
+	if err != nil || providers.GetPage().GetTotal() != 0 {
+		t.Fatalf("list providers = %v, %v", providers, err)
+	}
 	if _, err := notificationv1.NewNotificationServiceClient(connection).ListDeliveries(pskCtx, &notificationv1.ListDeliveriesRequest{}); status.Code(err) == codes.Unauthenticated {
 		t.Fatalf("PSK ListDeliveries was not authenticated: %v", err)
 	}

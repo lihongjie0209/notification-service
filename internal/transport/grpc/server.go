@@ -78,6 +78,8 @@ func notificationGRPCRequirement(enabled bool) platformauthz.GRPCResolver {
 			return platformauthz.Requirement{}, false
 		}
 		requirements := map[string]platformauthz.Requirement{
+			notificationv1.NotificationService_PutProvider_FullMethodName:           {Resource: "notification.provider", Action: "update", Scope: platformauthz.ScopePrincipal},
+			notificationv1.NotificationService_ListProviders_FullMethodName:         {Resource: "notification.provider", Action: "list", Scope: platformauthz.ScopePrincipal},
 			notificationv1.NotificationService_PutTemplate_FullMethodName:           {Resource: "notification.template", Action: "update", Scope: platformauthz.ScopePrincipal},
 			notificationv1.NotificationService_ListTemplates_FullMethodName:         {Resource: "notification.template", Action: "list", Scope: platformauthz.ScopePrincipal},
 			notificationv1.NotificationService_Send_FullMethodName:                  {Resource: "notification.delivery", Action: "send", Scope: platformauthz.ScopePrincipal},
@@ -93,6 +95,34 @@ func notificationGRPCRequirement(enabled bool) platformauthz.GRPCResolver {
 type notificationServer struct {
 	notificationv1.UnimplementedNotificationServiceServer
 	service *notificationdomain.Service
+}
+
+func (s *notificationServer) PutProvider(ctx context.Context, request *notificationv1.PutProviderRequest) (*notificationv1.PutProviderResponse, error) {
+	if request.GetProvider() == nil {
+		return nil, status.Error(codes.InvalidArgument, "provider is required")
+	}
+	value := request.GetProvider()
+	result, err := s.service.PutProvider(ctx, notificationdomain.Provider{TenantID: value.GetTenantId(), ApplicationID: value.GetApplicationId(), Code: value.GetCode(), Channel: value.GetChannel(), Upstream: value.GetUpstream(), Path: value.GetPath(), Priority: int(value.GetPriority()), Status: value.GetStatus()}, request.GetExpectedVersion())
+	if err != nil {
+		return nil, grpcError(err)
+	}
+	return &notificationv1.PutProviderResponse{Provider: toProtoProvider(result)}, nil
+}
+
+func (s *notificationServer) ListProviders(ctx context.Context, request *notificationv1.ListProvidersRequest) (*notificationv1.ListProvidersResponse, error) {
+	page, pageSize := 0, 0
+	if request.GetPage() != nil {
+		page, pageSize = int(request.GetPage().GetPage()), int(request.GetPage().GetPageSize())
+	}
+	result, err := s.service.ListProviders(ctx, request.GetTenantId(), request.GetApplicationId(), request.GetKeyword(), request.GetChannel(), request.GetStatus(), page, pageSize)
+	if err != nil {
+		return nil, grpcError(err)
+	}
+	response := &notificationv1.ListProvidersResponse{Page: &commonv1.PageResult{Total: uint64(result.Total), Page: uint32(result.Page), PageSize: uint32(result.PageSize)}}
+	for _, value := range result.Providers {
+		response.Providers = append(response.Providers, toProtoProvider(value))
+	}
+	return response, nil
 }
 
 func (s *notificationServer) PutTemplate(ctx context.Context, r *notificationv1.PutTemplateRequest) (*notificationv1.PutTemplateResponse, error) {
@@ -156,6 +186,9 @@ func (s *notificationServer) ListDeliveries(ctx context.Context, r *notification
 		response.Deliveries = append(response.Deliveries, toProtoDelivery(v))
 	}
 	return response, nil
+}
+func toProtoProvider(value notificationdomain.Provider) *notificationv1.Provider {
+	return &notificationv1.Provider{Id: value.ID, TenantId: value.TenantID, ApplicationId: value.ApplicationID, Code: value.Code, Channel: value.Channel, Upstream: value.Upstream, Path: value.Path, Priority: int32(value.Priority), Status: value.Status, Version: value.Version, CreatedAt: timestamppb.New(value.CreatedAt), UpdatedAt: timestamppb.New(value.UpdatedAt), CreatedBy: value.CreatedBy, UpdatedBy: value.UpdatedBy}
 }
 func toProtoTemplate(v notificationdomain.Template) *notificationv1.Template {
 	return &notificationv1.Template{Id: v.ID, TenantId: v.TenantID, ApplicationId: v.ApplicationID, Code: v.Code, Channel: v.Channel, Locale: v.Locale, Subject: v.Subject, Content: v.Content, Status: v.Status, Version: v.Version, CreatedAt: timestamppb.New(v.CreatedAt), UpdatedAt: timestamppb.New(v.UpdatedAt), CreatedBy: v.CreatedBy, UpdatedBy: v.UpdatedBy}
