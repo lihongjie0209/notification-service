@@ -353,6 +353,8 @@ func notificationHTTPRequirement(route string) (platformauthz.Requirement, bool)
 	requirements := map[string]platformauthz.Requirement{
 		"/api/v1/notifications/templates/put":     {Resource: "notification.template", Action: "update", Scope: platformauthz.ScopePrincipal},
 		"/api/v1/notifications/templates/list":    {Resource: "notification.template", Action: "list", Scope: platformauthz.ScopePrincipal},
+		"/api/v1/notifications/providers/put":     {Resource: "notification.provider", Action: "update", Scope: platformauthz.ScopePrincipal},
+		"/api/v1/notifications/providers/list":    {Resource: "notification.provider", Action: "list", Scope: platformauthz.ScopePrincipal},
 		"/api/v1/notifications/send":              {Resource: "notification.delivery", Action: "send", Scope: platformauthz.ScopePrincipal},
 		"/api/v1/notifications/providers/receipt": {Resource: "notification.receipt", Action: "record", Scope: platformauthz.ScopePlatform},
 		"/api/v1/notifications/deliveries/get":    {Resource: "notification.delivery", Action: "read", Scope: platformauthz.ScopePrincipal},

@@ -113,6 +113,26 @@ definitions:
     - application_id
     - tenant_id
     type: object
+  httptransport.ListProvidersRequest:
+    properties:
+      application_id:
+        type: string
+      channel:
+        type: string
+      keyword:
+        type: string
+      page:
+        type: integer
+      page_size:
+        type: integer
+      status:
+        type: string
+      tenant_id:
+        type: string
+    required:
+    - application_id
+    - tenant_id
+    type: object
   httptransport.ListTemplatesRequest:
     properties:
       application_id:
@@ -138,6 +158,19 @@ definitions:
       subject:
         type: string
     type: object
+  httptransport.ProviderPageResponseBody:
+    properties:
+      page:
+        type: integer
+      page_size:
+        type: integer
+      providers:
+        items:
+          $ref: '#/definitions/httptransport.ProviderResponseBody'
+        type: array
+      total:
+        type: integer
+    type: object
   httptransport.ProviderReceiptRequest:
     properties:
       application_id:
@@ -158,6 +191,65 @@ definitions:
     - provider_message_id
     - status
     - tenant_id
+    type: object
+  httptransport.ProviderResponseBody:
+    properties:
+      application_id:
+        type: string
+      channel:
+        type: string
+      code:
+        type: string
+      created_at:
+        type: string
+      created_by:
+        type: string
+      id:
+        type: string
+      path:
+        type: string
+      priority:
+        type: integer
+      status:
+        type: string
+      tenant_id:
+        type: string
+      updated_at:
+        type: string
+      updated_by:
+        type: string
+      upstream:
+        type: string
+      version:
+        type: integer
+    type: object
+  httptransport.PutProviderRequest:
+    properties:
+      application_id:
+        type: string
+      channel:
+        type: string
+      code:
+        type: string
+      expected_version:
+        type: integer
+      path:
+        type: string
+      priority:
+        type: integer
+      status:
+        type: string
+      tenant_id:
+        type: string
+      upstream:
+        type: string
+    required:
+    - application_id
+    - channel
+    - code
+    - path
+    - tenant_id
+    - upstream
     type: object
   httptransport.PutTemplateRequest:
     properties:
@@ -349,6 +441,62 @@ paths:
       summary: List notification deliveries
       tags:
       - notification
+  /api/v1/notifications/providers/list:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Provider filters and pagination
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/httptransport.ListProvidersRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/httptransport.Response'
+            - properties:
+                body:
+                  $ref: '#/definitions/httptransport.ProviderPageResponseBody'
+              type: object
+      security:
+      - Bearer: []
+      summary: List notification provider routes
+      tags:
+      - notifications
+  /api/v1/notifications/providers/put:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Provider route
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/httptransport.PutProviderRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/httptransport.Response'
+            - properties:
+                body:
+                  $ref: '#/definitions/httptransport.ProviderResponseBody'
+              type: object
+      security:
+      - Bearer: []
+      summary: Create or update a notification provider route
+      tags:
+      - notifications
   /api/v1/notifications/providers/receipt:
     post:
       parameters:

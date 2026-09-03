@@ -57,8 +57,16 @@ func TestRepositoryAndMigrations(t *testing.T) {
 				t.Fatal(err)
 			}
 			t.Cleanup(func() { _ = db.Close() })
-			service := notificationdomain.NewService(notificationdomain.NewRepository(db), appdb.NewTransactor(db), nil, config.Config{})
+			service := notificationdomain.NewService(notificationdomain.NewRepository(db), appdb.NewTransactor(db), nil, config.Config{Outbound: config.Outbound{HTTP: map[string]config.HTTPUpstream{"email-primary": {BaseURL: "https://provider.example.test"}}}})
 			actorCtx := platformprincipal.WithContext(ctx, platformprincipal.Principal{ID: "admin-1", Type: platformprincipal.TypeUser, TenantID: "tenant-1"})
+			provider, err := service.PutProvider(actorCtx, notificationdomain.Provider{TenantID: "tenant-1", ApplicationID: "app-1", Code: "email-primary", Channel: "email", Upstream: "email-primary", Path: "/send", Priority: 10}, 0)
+			if err != nil || provider.Version != 1 {
+				t.Fatalf("put provider=%+v err=%v", provider, err)
+			}
+			providers, err := service.ListProviders(actorCtx, "tenant-1", "app-1", "primary", "email", "active", 1, 20)
+			if err != nil || providers.Total != 1 || len(providers.Providers) != 1 || providers.Providers[0].ID != provider.ID {
+				t.Fatalf("list providers=%+v err=%v", providers, err)
+			}
 			template, err := service.PutTemplate(actorCtx, notificationdomain.Template{TenantID: "tenant-1", ApplicationID: "app-1", Code: "welcome", Channel: "email", Locale: "zh-cn", Subject: "Welcome", Content: "Hello {{.name}}"}, 0)
 			if err != nil || template.Version != 1 {
 				t.Fatalf("put template=%+v err=%v", template, err)

@@ -34,6 +34,26 @@ type PutTemplateRequest struct {
 	Status          string `json:"status"`
 	ExpectedVersion int64  `json:"expected_version"`
 }
+type PutProviderRequest struct {
+	TenantID        string `json:"tenant_id" binding:"required"`
+	ApplicationID   string `json:"application_id" binding:"required"`
+	Code            string `json:"code" binding:"required"`
+	Channel         string `json:"channel" binding:"required"`
+	Upstream        string `json:"upstream" binding:"required"`
+	Path            string `json:"path" binding:"required"`
+	Priority        int    `json:"priority"`
+	Status          string `json:"status"`
+	ExpectedVersion int64  `json:"expected_version"`
+}
+type ListProvidersRequest struct {
+	TenantID      string `json:"tenant_id" binding:"required"`
+	ApplicationID string `json:"application_id" binding:"required"`
+	Keyword       string `json:"keyword"`
+	Channel       string `json:"channel"`
+	Status        string `json:"status"`
+	Page          int    `json:"page"`
+	PageSize      int    `json:"page_size"`
+}
 type SendNotificationRequest struct {
 	TenantID       string            `json:"tenant_id" binding:"required"`
 	ApplicationID  string            `json:"application_id" binding:"required"`
@@ -79,6 +99,28 @@ type TemplatePageResponseBody struct {
 	Total     int64                  `json:"total"`
 	Page      int                    `json:"page"`
 	PageSize  int                    `json:"page_size"`
+}
+type ProviderPageResponseBody struct {
+	Providers []ProviderResponseBody `json:"providers"`
+	Total     int64                  `json:"total"`
+	Page      int                    `json:"page"`
+	PageSize  int                    `json:"page_size"`
+}
+type ProviderResponseBody struct {
+	ID            string    `json:"id"`
+	TenantID      string    `json:"tenant_id"`
+	ApplicationID string    `json:"application_id"`
+	Code          string    `json:"code"`
+	Channel       string    `json:"channel"`
+	Upstream      string    `json:"upstream"`
+	Path          string    `json:"path"`
+	Priority      int       `json:"priority"`
+	Status        string    `json:"status"`
+	Version       int64     `json:"version"`
+	CreatedAt     time.Time `json:"created_at"`
+	UpdatedAt     time.Time `json:"updated_at"`
+	CreatedBy     string    `json:"created_by"`
+	UpdatedBy     string    `json:"updated_by"`
 }
 
 type TemplateResponseBody struct {
@@ -178,6 +220,60 @@ func (h *Handler) Ready(c *gin.Context) {
 func (h *Handler) Me(c *gin.Context) {
 	subject, _ := c.Get("subject")
 	OK(c, gin.H{"subject": subject})
+}
+
+// PutNotificationProvider godoc
+// @Summary Create or update a notification provider route
+// @Tags notifications
+// @Accept json
+// @Produce json
+// @Security Bearer
+// @Param request body PutProviderRequest true "Provider route"
+// @Success 200 {object} Response{body=ProviderResponseBody}
+// @Router /api/v1/notifications/providers/put [post]
+func (h *Handler) PutNotificationProvider(c *gin.Context) {
+	var request PutProviderRequest
+	if err := c.ShouldBindJSON(&request); err != nil {
+		Fail(c, h.logger, apperror.Invalid("invalid request body", err))
+		return
+	}
+	value, err := h.notifications.PutProvider(c.Request.Context(), notificationdomain.Provider{TenantID: request.TenantID, ApplicationID: request.ApplicationID, Code: request.Code, Channel: request.Channel, Upstream: request.Upstream, Path: request.Path, Priority: request.Priority, Status: request.Status}, request.ExpectedVersion)
+	if err != nil {
+		Fail(c, h.logger, err)
+		return
+	}
+	OK(c, providerResponse(value))
+}
+
+// ListNotificationProviders godoc
+// @Summary List notification provider routes
+// @Tags notifications
+// @Accept json
+// @Produce json
+// @Security Bearer
+// @Param request body ListProvidersRequest true "Provider filters and pagination"
+// @Success 200 {object} Response{body=ProviderPageResponseBody}
+// @Router /api/v1/notifications/providers/list [post]
+func (h *Handler) ListNotificationProviders(c *gin.Context) {
+	var request ListProvidersRequest
+	if err := c.ShouldBindJSON(&request); err != nil {
+		Fail(c, h.logger, apperror.Invalid("invalid request body", err))
+		return
+	}
+	page, err := h.notifications.ListProviders(c.Request.Context(), request.TenantID, request.ApplicationID, request.Keyword, request.Channel, request.Status, request.Page, request.PageSize)
+	if err != nil {
+		Fail(c, h.logger, err)
+		return
+	}
+	providers := make([]ProviderResponseBody, 0, len(page.Providers))
+	for _, value := range page.Providers {
+		providers = append(providers, providerResponse(value))
+	}
+	OK(c, ProviderPageResponseBody{Providers: providers, Total: page.Total, Page: page.Page, PageSize: page.PageSize})
+}
+
+func providerResponse(value notificationdomain.Provider) ProviderResponseBody {
+	return ProviderResponseBody{ID: value.ID, TenantID: value.TenantID, ApplicationID: value.ApplicationID, Code: value.Code, Channel: value.Channel, Upstream: value.Upstream, Path: value.Path, Priority: value.Priority, Status: value.Status, Version: value.Version, CreatedAt: value.CreatedAt, UpdatedAt: value.UpdatedAt, CreatedBy: value.CreatedBy, UpdatedBy: value.UpdatedBy}
 }
 
 // Version godoc

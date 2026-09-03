@@ -13,6 +13,10 @@ var ErrNotFound = errors.New("notification resource not found")
 var ErrStaleVersion = errors.New("stale notification version")
 
 type Repository interface {
+	GetProvider(context.Context, string, string, string) (Provider, error)
+	ListProviders(context.Context, string, string, string, string, string, int, int) ([]Provider, int64, error)
+	InsertProvider(context.Context, sqlx.ExtContext, Provider) error
+	UpdateProvider(context.Context, sqlx.ExtContext, Provider, int64) error
 	GetTemplate(context.Context, string, string, string, string, string) (Template, error)
 	ListTemplates(context.Context, string, string, string, string, string, int, int) ([]Template, int64, error)
 	InsertTemplate(context.Context, sqlx.ExtContext, Template) error
@@ -72,7 +76,49 @@ type SQLRepository struct{ db *sqlx.DB }
 func NewRepository(db *sqlx.DB) Repository { return &SQLRepository{db: db} }
 
 const templateColumns = `id,tenant_id,application_id,code,channel,locale,subject,content,status,version,created_at,updated_at,created_by,updated_by`
+const providerColumns = `id,tenant_id,application_id,code,channel,upstream,path,priority,status,version,created_at,updated_at,created_by,updated_by`
 const deliveryColumns = `id,tenant_id,application_id,template_code,channel,locale,recipient,variables,idempotency_key,status,provider,provider_message_id,failure_reason,attempts,next_attempt_at,version,created_at,updated_at,created_by,updated_by`
+
+func (r *SQLRepository) GetProvider(ctx context.Context, tenant, application, code string) (Provider, error) {
+	var value Provider
+	err := r.db.GetContext(ctx, &value, r.db.Rebind(`SELECT `+providerColumns+` FROM notification_providers WHERE tenant_id=? AND application_id=? AND code=?`), tenant, application, code)
+	if errors.Is(err, sql.ErrNoRows) {
+		err = ErrNotFound
+	}
+	return value, err
+}
+
+func (r *SQLRepository) ListProviders(ctx context.Context, tenant, application, keyword, channel, status string, limit, offset int) ([]Provider, int64, error) {
+	where := ` WHERE tenant_id=? AND application_id=? AND (?='' OR code LIKE ? OR upstream LIKE ?)` +
+		` AND (?='' OR channel=?) AND (?='' OR status=?)`
+	like := "%" + keyword + "%"
+	args := []any{tenant, application, keyword, like, like, channel, channel, status, status}
+	var total int64
+	if err := r.db.GetContext(ctx, &total, r.db.Rebind(`SELECT count(*) FROM notification_providers`+where), args...); err != nil {
+		return nil, 0, err
+	}
+	args = append(args, limit, offset)
+	var values []Provider
+	err := r.db.SelectContext(ctx, &values, r.db.Rebind(`SELECT `+providerColumns+` FROM notification_providers`+where+` ORDER BY priority,code LIMIT ? OFFSET ?`), args...)
+	return values, total, err
+}
+
+func (r *SQLRepository) InsertProvider(ctx context.Context, executor sqlx.ExtContext, value Provider) error {
+	_, err := executor.ExecContext(ctx, r.db.Rebind(`INSERT INTO notification_providers (`+providerColumns+`) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`), value.ID, value.TenantID, value.ApplicationID, value.Code, value.Channel, value.Upstream, value.Path, value.Priority, value.Status, value.Version, value.CreatedAt, value.UpdatedAt, value.CreatedBy, value.UpdatedBy)
+	return err
+}
+
+func (r *SQLRepository) UpdateProvider(ctx context.Context, executor sqlx.ExtContext, value Provider, expected int64) error {
+	result, err := executor.ExecContext(ctx, r.db.Rebind(`UPDATE notification_providers SET channel=?,upstream=?,path=?,priority=?,status=?,version=version+1,updated_at=?,updated_by=? WHERE id=? AND version=?`), value.Channel, value.Upstream, value.Path, value.Priority, value.Status, value.UpdatedAt, value.UpdatedBy, value.ID, expected)
+	if err != nil {
+		return err
+	}
+	changed, err := result.RowsAffected()
+	if err == nil && changed != 1 {
+		return ErrStaleVersion
+	}
+	return err
+}
 
 func (r *SQLRepository) GetTemplate(ctx context.Context, tenant, application, code, channel, locale string) (Template, error) {
 	var v Template

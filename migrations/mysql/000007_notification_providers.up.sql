@@ -1,0 +1,20 @@
+CREATE TABLE notification_providers (
+ id CHAR(36) PRIMARY KEY,
+ tenant_id VARCHAR(191) NOT NULL,
+ application_id VARCHAR(191) NOT NULL,
+ code VARCHAR(191) NOT NULL,
+ channel VARCHAR(32) NOT NULL,
+ upstream VARCHAR(191) NOT NULL,
+ path TEXT NOT NULL,
+ priority INT NOT NULL DEFAULT 100,
+ status VARCHAR(32) NOT NULL,
+ version BIGINT NOT NULL DEFAULT 1,
+ created_at DATETIME(6) NOT NULL,
+ updated_at DATETIME(6) NOT NULL,
+ created_by TEXT NOT NULL,
+ updated_by TEXT NOT NULL,
+ UNIQUE KEY notification_provider_scope_code_uq(tenant_id,application_id,code),
+ INDEX notification_providers_scope_list_idx(tenant_id,application_id,status,channel,priority,code),
+ CONSTRAINT chk_notification_provider_priority CHECK(priority >= 0),
+ CONSTRAINT chk_notification_provider_status CHECK(status IN ('active','disabled'))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

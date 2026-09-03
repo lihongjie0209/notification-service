@@ -39,9 +39,10 @@ func (s unavailableSender) Send(context.Context, Message) (SendResult, error) {
 }
 
 type ProviderSender struct {
-	channel string
-	client  *outbound.HTTPClient
-	path    string
+	provider string
+	channel  string
+	client   *outbound.HTTPClient
+	path     string
 }
 
 func (s *ProviderSender) Send(ctx context.Context, message Message) (SendResult, error) {
@@ -66,7 +67,7 @@ func (s *ProviderSender) Send(ctx context.Context, message Message) (SendResult,
 	if result.MessageID == "" {
 		return SendResult{}, errors.New("provider response omitted message_id")
 	}
-	return SendResult{Provider: s.channel, MessageID: result.MessageID}, nil
+	return SendResult{Provider: s.provider, MessageID: result.MessageID}, nil
 }
 
 func NewSenderRegistry(registry *outbound.Registry, cfg config.Config) SenderRegistry {
@@ -74,7 +75,7 @@ func NewSenderRegistry(registry *outbound.Registry, cfg config.Config) SenderReg
 	for channel, provider := range cfg.Notification.Providers {
 		client, ok := registry.HTTP(provider.Upstream)
 		if ok && (channel == "email" || channel == "sms" || channel == "webhook") {
-			senders[channel] = &ProviderSender{channel: channel, client: client, path: provider.Path}
+			senders[channel] = &ProviderSender{provider: channel, channel: channel, client: client, path: provider.Path}
 		}
 	}
 	return senders
@@ -84,11 +85,12 @@ type Dispatcher struct {
 	repository Repository
 	transactor *database.Transactor
 	senders    SenderRegistry
+	outbound   *outbound.Registry
 	cfg        config.Notification
 	now        func() time.Time
 }
 
-func NewDispatcher(repository Repository, transactor *database.Transactor, senders SenderRegistry, cfg config.Config) *Dispatcher {
+func NewDispatcher(repository Repository, transactor *database.Transactor, senders SenderRegistry, registry *outbound.Registry, cfg config.Config) *Dispatcher {
 	workerConfig := cfg.Notification
 	if workerConfig.DispatchInterval <= 0 {
 		workerConfig.DispatchInterval = time.Second
@@ -102,7 +104,7 @@ func NewDispatcher(repository Repository, transactor *database.Transactor, sende
 	if workerConfig.RetryBase <= 0 {
 		workerConfig.RetryBase = 5 * time.Second
 	}
-	return &Dispatcher{repository: repository, transactor: transactor, senders: senders, cfg: workerConfig, now: time.Now}
+	return &Dispatcher{repository: repository, transactor: transactor, senders: senders, outbound: registry, cfg: workerConfig, now: time.Now}
 }
 func (d *Dispatcher) RunOnce(ctx context.Context) (int, error) {
 	var due []Delivery
@@ -130,10 +132,15 @@ func (d *Dispatcher) deliver(ctx context.Context, delivery Delivery) {
 			content, contentErr := render(tpl.Code+"-content", tpl.Content, variables)
 			err = errors.Join(subjectErr, contentErr)
 			if err == nil {
-				sender := d.senders[delivery.Channel]
+				sender, senderErr := d.sender(ctx, delivery)
+				if senderErr != nil {
+					err = senderErr
+				}
 				if sender == nil {
-					err = fmt.Errorf("sender for %s is not configured", delivery.Channel)
-				} else {
+					if err == nil {
+						err = fmt.Errorf("sender for %s is not configured", delivery.Channel)
+					}
+				} else if err == nil {
 					result, err = sender.Send(ctx, Message{DeliveryID: delivery.ID, Channel: delivery.Channel, Recipient: delivery.Recipient, Subject: subject, Content: content})
 				}
 			}
@@ -164,6 +171,22 @@ func (d *Dispatcher) deliver(ctx context.Context, delivery Delivery) {
 		service := &Service{repository: d.repository}
 		return service.addDeliveryEvent(context.WithoutCancel(ctx), tx, delivery, "platform.notification.v1.NotificationStatusChanged", "platform.notification.status.changed.v1")
 	})
+}
+
+func (d *Dispatcher) sender(ctx context.Context, delivery Delivery) (Sender, error) {
+	providers, _, err := d.repository.ListProviders(ctx, delivery.TenantID, delivery.ApplicationID, "", delivery.Channel, "active", 1, 0)
+	if err != nil {
+		return nil, fmt.Errorf("resolve notification provider: %w", err)
+	}
+	if len(providers) == 0 {
+		return d.senders[delivery.Channel], nil
+	}
+	provider := providers[0]
+	client, ok := d.outbound.HTTP(provider.Upstream)
+	if !ok {
+		return nil, fmt.Errorf("notification provider upstream %q is not configured", provider.Upstream)
+	}
+	return &ProviderSender{provider: provider.Code, channel: provider.Channel, client: client, path: provider.Path}, nil
 }
 func render(name, source string, variables map[string]string) (string, error) {
 	parsed, err := template.New(name).Option("missingkey=error").Parse(source)

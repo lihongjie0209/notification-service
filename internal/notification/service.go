@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"net/url"
 	"strings"
 	"text/template"
 	"time"
@@ -28,6 +29,7 @@ type Service struct {
 	transactor   *database.Transactor
 	limiter      *ratelimit.Limiter
 	config       config.Notification
+	outboundHTTP map[string]config.HTTPUpstream
 	applications appaccess.Verifier
 	now          func() time.Time
 }
@@ -45,8 +47,99 @@ func NewRuntimeService(r Repository, t *database.Transactor, limiter *ratelimit.
 	if applications == nil {
 		return nil, errors.New("application verifier is required")
 	}
-	return &Service{repository: r, transactor: t, limiter: limiter, config: cfg.Notification, applications: applications, now: time.Now}, nil
+	return &Service{repository: r, transactor: t, limiter: limiter, config: cfg.Notification, outboundHTTP: cfg.Outbound.HTTP, applications: applications, now: time.Now}, nil
 }
+
+func (s *Service) PutProvider(ctx context.Context, value Provider, expected int64) (Provider, error) {
+	value.TenantID = strings.TrimSpace(value.TenantID)
+	value.ApplicationID = strings.TrimSpace(value.ApplicationID)
+	value.Code = strings.ToLower(strings.TrimSpace(value.Code))
+	value.Channel = strings.ToLower(strings.TrimSpace(value.Channel))
+	value.Upstream = strings.TrimSpace(value.Upstream)
+	value.Path = strings.TrimSpace(value.Path)
+	value.Status = strings.ToLower(strings.TrimSpace(value.Status))
+	if value.Status == "" {
+		value.Status = "active"
+	}
+	if value.TenantID == "" || value.ApplicationID == "" || value.Code == "" || !validChannel(value.Channel) || value.Upstream == "" || !validProviderPath(value.Path) || value.Priority < 0 || (value.Status != "active" && value.Status != "disabled") {
+		return Provider{}, apperror.Invalid("invalid notification provider", nil)
+	}
+	if _, configured := s.outboundHTTP[value.Upstream]; !configured {
+		return Provider{}, apperror.Invalid("notification provider upstream is not configured", nil)
+	}
+	caller, ok := platformprincipal.FromContext(ctx)
+	if !ok {
+		return Provider{}, apperror.Unauthorized("authenticated actor is required")
+	}
+	if err := enforceTenant(caller, value.TenantID); err != nil {
+		return Provider{}, err
+	}
+	if err := s.verifyApplication(ctx, value.TenantID, value.ApplicationID); err != nil {
+		return Provider{}, err
+	}
+	now := s.now()
+	current, err := s.repository.GetProvider(ctx, value.TenantID, value.ApplicationID, value.Code)
+	if errors.Is(err, ErrNotFound) {
+		if expected != 0 {
+			return Provider{}, apperror.Conflict("notification provider version conflict", ErrStaleVersion)
+		}
+		value.ID = uuid.NewString()
+		value.Version = 1
+		value.CreatedAt, value.UpdatedAt = now, now
+		value.CreatedBy, value.UpdatedBy = caller.ID, caller.ID
+		err = s.transactor.Within(ctx, nil, func(tx *sqlx.Tx) error { return s.repository.InsertProvider(ctx, tx, value) })
+		return value, translate(err)
+	}
+	if err != nil {
+		return Provider{}, translate(err)
+	}
+	if expected <= 0 || expected != current.Version {
+		return Provider{}, apperror.Conflict("notification provider version conflict", ErrStaleVersion)
+	}
+	current.Channel, current.Upstream, current.Path = value.Channel, value.Upstream, value.Path
+	current.Priority, current.Status, current.UpdatedAt, current.UpdatedBy = value.Priority, value.Status, now, caller.ID
+	err = s.transactor.Within(ctx, nil, func(tx *sqlx.Tx) error { return s.repository.UpdateProvider(ctx, tx, current, expected) })
+	current.Version = expected + 1
+	return current, translate(err)
+}
+
+func validProviderPath(value string) bool {
+	parsed, err := url.Parse(value)
+	return err == nil && strings.HasPrefix(parsed.Path, "/") && !strings.HasPrefix(parsed.Path, "//") && parsed.Scheme == "" && parsed.Host == "" && parsed.User == nil && parsed.Fragment == ""
+}
+
+func (s *Service) ListProviders(ctx context.Context, tenant, application, keyword, channel, status string, page, pageSize int) (ProviderPage, error) {
+	caller, ok := platformprincipal.FromContext(ctx)
+	if !ok {
+		return ProviderPage{}, apperror.Unauthorized("authenticated actor is required")
+	}
+	tenant, application, keyword = strings.TrimSpace(tenant), strings.TrimSpace(application), strings.TrimSpace(keyword)
+	channel, status = strings.ToLower(strings.TrimSpace(channel)), strings.ToLower(strings.TrimSpace(status))
+	if err := enforceTenant(caller, tenant); err != nil {
+		return ProviderPage{}, err
+	}
+	if err := s.verifyApplication(ctx, tenant, application); err != nil {
+		return ProviderPage{}, err
+	}
+	if channel != "" && !validChannel(channel) {
+		return ProviderPage{}, apperror.Invalid("invalid notification channel", nil)
+	}
+	if status != "" && status != "active" && status != "disabled" {
+		return ProviderPage{}, apperror.Invalid("invalid notification provider status", nil)
+	}
+	if page <= 0 {
+		page = 1
+	}
+	if pageSize <= 0 {
+		pageSize = 20
+	}
+	if pageSize > 100 {
+		return ProviderPage{}, apperror.Invalid("page_size must not exceed 100", nil)
+	}
+	values, total, err := s.repository.ListProviders(ctx, tenant, application, keyword, channel, status, pageSize, (page-1)*pageSize)
+	return ProviderPage{Providers: values, Total: total, Page: page, PageSize: pageSize}, translate(err)
+}
+
 func (s *Service) PutTemplate(ctx context.Context, v Template, expected int64) (Template, error) {
 	v.TenantID = strings.TrimSpace(v.TenantID)
 	v.ApplicationID = strings.TrimSpace(v.ApplicationID)

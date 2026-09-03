@@ -28,9 +28,9 @@ func TestProviderSenderUsesReliableHTTPClient(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	sender := &ProviderSender{channel: "email", client: client, path: "/send"}
+	sender := &ProviderSender{provider: "mail-primary", channel: "email", client: client, path: "/send"}
 	result, err := sender.Send(t.Context(), Message{DeliveryID: "delivery-1", Channel: "email", Recipient: "a@example.com", Subject: "Hello", Content: "World"})
-	if err != nil || result.MessageID != "provider-1" || result.Provider != "email" {
+	if err != nil || result.MessageID != "provider-1" || result.Provider != "mail-primary" {
 		t.Fatalf("result=%+v err=%v", result, err)
 	}
 }

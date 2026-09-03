@@ -18,6 +18,22 @@ type Template struct {
 	CreatedBy     string    `db:"created_by" json:"created_by"`
 	UpdatedBy     string    `db:"updated_by" json:"updated_by"`
 }
+type Provider struct {
+	ID            string    `db:"id" json:"id"`
+	TenantID      string    `db:"tenant_id" json:"tenant_id"`
+	ApplicationID string    `db:"application_id" json:"application_id"`
+	Code          string    `db:"code" json:"code"`
+	Channel       string    `db:"channel" json:"channel"`
+	Upstream      string    `db:"upstream" json:"upstream"`
+	Path          string    `db:"path" json:"path"`
+	Priority      int       `db:"priority" json:"priority"`
+	Status        string    `db:"status" json:"status"`
+	Version       int64     `db:"version" json:"version"`
+	CreatedAt     time.Time `db:"created_at" json:"created_at"`
+	UpdatedAt     time.Time `db:"updated_at" json:"updated_at"`
+	CreatedBy     string    `db:"created_by" json:"created_by"`
+	UpdatedBy     string    `db:"updated_by" json:"updated_by"`
+}
 type Delivery struct {
 	ID                string    `db:"id" json:"id"`
 	TenantID          string    `db:"tenant_id" json:"tenant_id"`
@@ -48,6 +64,12 @@ type Page struct {
 }
 type TemplatePage struct {
 	Templates []Template `json:"templates"`
+	Total     int64      `json:"total"`
+	Page      int        `json:"page"`
+	PageSize  int        `json:"page_size"`
+}
+type ProviderPage struct {
+	Providers []Provider `json:"providers"`
 	Total     int64      `json:"total"`
 	Page      int        `json:"page"`
 	PageSize  int        `json:"page_size"`

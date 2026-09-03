@@ -26,9 +26,32 @@ type rejectingApplicationVerifier struct{ err error }
 func (v rejectingApplicationVerifier) Verify(context.Context, string, string) error { return v.err }
 
 type fakeRepo struct {
+	provider Provider
 	template Template
 	delivery Delivery
 	outbox   []OutboxEvent
+}
+
+func (f *fakeRepo) GetProvider(context.Context, string, string, string) (Provider, error) {
+	if f.provider.ID == "" {
+		return Provider{}, ErrNotFound
+	}
+	return f.provider, nil
+}
+func (f *fakeRepo) ListProviders(context.Context, string, string, string, string, string, int, int) ([]Provider, int64, error) {
+	return []Provider{f.provider}, 1, nil
+}
+func (f *fakeRepo) InsertProvider(_ context.Context, _ sqlx.ExtContext, value Provider) error {
+	f.provider = value
+	return nil
+}
+func (f *fakeRepo) UpdateProvider(_ context.Context, _ sqlx.ExtContext, value Provider, expected int64) error {
+	if f.provider.Version != expected {
+		return ErrStaleVersion
+	}
+	value.Version = expected + 1
+	f.provider = value
+	return nil
 }
 
 func (f *fakeRepo) AddOutbox(_ context.Context, _ sqlx.ExtContext, event OutboxEvent) error {
@@ -140,6 +163,67 @@ func TestPutTemplateRejectsInvalidSyntax(t *testing.T) {
 	ctx := platformprincipal.WithContext(t.Context(), platformprincipal.Principal{ID: "admin", Type: platformprincipal.TypeUser, TenantID: "t"})
 	if _, err := service.PutTemplate(ctx, Template{TenantID: "t", ApplicationID: "app-1", Code: "welcome", Channel: "email", Locale: "zh-cn", Content: "{{"}, 0); err == nil {
 		t.Fatal("invalid template accepted")
+	}
+}
+
+func TestPutProviderCreatesAndUpdatesWithOptimisticLock(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+	repository := &fakeRepo{}
+	service := NewService(repository, database.NewTransactor(sqlx.NewDb(db, "sqlmock")), nil, config.Config{Outbound: config.Outbound{HTTP: map[string]config.HTTPUpstream{"email-primary": {}, "email-secondary": {}}}})
+	service.now = func() time.Time { return time.Date(2026, 9, 3, 8, 0, 0, 0, time.FixedZone("UTC+8", 8*3600)) }
+	ctx := platformprincipal.WithContext(t.Context(), platformprincipal.Principal{ID: "admin", Type: platformprincipal.TypeUser, TenantID: "tenant-1"})
+	mock.ExpectBegin()
+	mock.ExpectCommit()
+	created, err := service.PutProvider(ctx, Provider{TenantID: "tenant-1", ApplicationID: "app-1", Code: " primary ", Channel: " EMAIL ", Upstream: "email-primary", Path: "/send", Priority: 10}, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if created.Code != "primary" || created.Channel != "email" || created.Status != "active" || created.Version != 1 || created.CreatedBy != "admin" {
+		t.Fatalf("created provider=%+v", created)
+	}
+	mock.ExpectBegin()
+	mock.ExpectCommit()
+	updated, err := service.PutProvider(ctx, Provider{TenantID: "tenant-1", ApplicationID: "app-1", Code: "primary", Channel: "email", Upstream: "email-secondary", Path: "/v2/send", Priority: 20, Status: "disabled"}, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if updated.Version != 2 || updated.Upstream != "email-secondary" || updated.Status != "disabled" {
+		t.Fatalf("updated provider=%+v", updated)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestPutProviderRejectsUnsafeRouteAndStaleCreate(t *testing.T) {
+	service := NewService(&fakeRepo{}, &database.Transactor{}, nil, config.Config{Outbound: config.Outbound{HTTP: map[string]config.HTTPUpstream{"email": {}}}})
+	ctx := platformprincipal.WithContext(t.Context(), platformprincipal.Principal{ID: "admin", Type: platformprincipal.TypeUser, TenantID: "tenant-1"})
+	for _, value := range []Provider{
+		{TenantID: "tenant-1", ApplicationID: "app-1", Code: "primary", Channel: "email", Upstream: "email", Path: "https://evil.example/send"},
+		{TenantID: "tenant-1", ApplicationID: "app-1", Code: "primary", Channel: "email", Upstream: "email", Path: "//evil.example/send"},
+		{TenantID: "tenant-1", ApplicationID: "app-1", Code: "primary", Channel: "unknown", Upstream: "email", Path: "/send"},
+	} {
+		if _, err := service.PutProvider(ctx, value, 0); err == nil {
+			t.Fatalf("PutProvider(%+v) accepted invalid provider", value)
+		}
+	}
+	if _, err := service.PutProvider(ctx, Provider{TenantID: "tenant-1", ApplicationID: "app-1", Code: "primary", Channel: "email", Upstream: "email", Path: "/send"}, 2); err == nil {
+		t.Fatal("PutProvider accepted a nonzero version for create")
+	}
+}
+
+func TestListProvidersBoundsPageSizeAndTenantScope(t *testing.T) {
+	service := NewService(&fakeRepo{}, &database.Transactor{}, nil, config.Config{})
+	ctx := platformprincipal.WithContext(t.Context(), platformprincipal.Principal{ID: "admin", Type: platformprincipal.TypeUser, TenantID: "tenant-1"})
+	if _, err := service.ListProviders(ctx, "tenant-1", "app-1", "", "", "", 1, 101); err == nil {
+		t.Fatal("ListProviders accepted page_size above 100")
+	}
+	if _, err := service.ListProviders(ctx, "tenant-2", "app-1", "", "", "", 1, 20); err == nil {
+		t.Fatal("ListProviders accepted another tenant")
 	}
 }
 func TestListTemplatesRejectsTenantOutsideJWTContext(t *testing.T) {

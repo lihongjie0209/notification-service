@@ -65,6 +65,8 @@ func NewServer(lc fx.Lifecycle, cfg config.Config, handler *Handler, authService
 	api.POST("/me", handler.Me)
 	api.POST("/notifications/templates/put", handler.PutNotificationTemplate)
 	api.POST("/notifications/templates/list", handler.ListNotificationTemplates)
+	api.POST("/notifications/providers/put", handler.PutNotificationProvider)
+	api.POST("/notifications/providers/list", handler.ListNotificationProviders)
 	api.POST("/notifications/send", handler.SendNotification)
 	api.POST("/notifications/providers/receipt", handler.RecordProviderReceipt)
 	api.POST("/notifications/deliveries/get", handler.GetNotificationDelivery)
